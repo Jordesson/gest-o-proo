@@ -971,7 +971,7 @@ document.addEventListener('change',e=>{
   if(e.target.id==='pdv-client'){pdvCli=e.target.value;return}
   if(e.target.id==='pdv-method'){pdvMetodo=e.target.value;return}
   if(e.target.id==='import-produtos-csv'){const file=e.target.files&&e.target.files[0];importProductsCsv(file);e.target.value='';return}
-  if(e.target.id==='logoempresa'){const file=e.target.files&&e.target.files[0];if(!file)return;if(!/^image\/(png|jpeg|webp)$/.test(file.type))return alert('Escolha uma imagem PNG, JPG ou WebP.');if(file.size>2*1024*1024)return alert('A imagem deve ter até 2 MB.');const reader=new FileReader();reader.onload=()=>{db.empresa=db.empresa||{};db.empresa.logo=reader.result;save();render()};reader.readAsDataURL(file);return}
+  if(e.target.id==='logoempresa'){const file=e.target.files&&e.target.files[0];if(!file)return;if(!/^image\/(png|jpeg|webp)$/.test(file.type))return alert('Escolha uma imagem PNG, JPG ou WebP.');if(file.size>2*1024*1024)return alert('A imagem deve ter até 2 MB.');const reader=new FileReader();reader.onload=()=>{const fin=u=>{db.empresa=db.empresa||{};db.empresa.logo=u;save();render()};(window.otimizarLogo?window.otimizarLogo(reader.result):Promise.resolve(reader.result)).then(fin,()=>fin(reader.result))};reader.readAsDataURL(file);return}
   if(e.target.name==='itemprod'){const p=db.prod.find(x=>String(x.id)===String(e.target.value));const price=e.target.closest('.sale-ir')?.querySelector('[name=itempreco]');if(price)price.value=p?Number(p.preco||0).toFixed(2):'';updateSaleTotal()}
   if(e.target.closest('#fp')){calcularPreco();if(e.target.id==='tipoitem'){const isService=e.target.value==='servico';const q=$('#qtdp'),m=$('#minp');if(q){q.disabled=isService;q.placeholder=isService?'Serviço não controla estoque':'Quantidade em estoque';if(isService)q.value=0}if(m){m.disabled=isService;if(isService)m.value=0}}}
   if(e.target.name=='cliente'){const c=db.clientes.find(x=>x.nome==e.target.value);if(c&&c.tel)e.target.form.elements.tel.value=c.tel}
@@ -1011,6 +1011,24 @@ function traduz(e){
   return 'Não foi possível concluir. Tente novamente.';
 }
 
+/* reduz o logotipo para no maximo 360 px (de ~900 KB para poucas dezenas de KB) */
+window.otimizarLogo=function(src,max){
+  max=max||360;
+  return new Promise(function(res,rej){
+    var im=new Image();
+    im.onload=function(){
+      var w=im.naturalWidth,h=im.naturalHeight,s=Math.min(1,max/Math.max(w,h));
+      var cw=Math.max(1,Math.round(w*s)),ch=Math.max(1,Math.round(h*s));
+      var c=document.createElement('canvas');c.width=cw;c.height=ch;
+      c.getContext('2d').drawImage(im,0,0,cw,ch);
+      var out=c.toDataURL('image/webp',0.85);
+      if(out.indexOf('data:image/webp')!==0)out=c.toDataURL('image/png');
+      res(out.length<src.length?out:src);
+    };
+    im.onerror=function(){rej(new Error('imagem invalida'))};
+    im.src=src;
+  });
+};
 function defaults(){return {clientes:[],lanc:[],prod:[],orc:[],empresa:{},fornecedores:[],compras:[],caixas:[],caixaMov:[],movEstoque:[],usuarios:[],devolucoes:[]}}
 function aplicar(c){
   var d=Object.assign(defaults(),c||{});
@@ -1077,10 +1095,12 @@ document.addEventListener('visibilitychange',function(){
 async function sincronizar(){
   if(!empresaId||dirty||saving)return;
   try{
-    var r=await client.from('dados').select('conteudo,atualizado_em').eq('empresa_id',empresaId).maybeSingle();
+    var r=await client.from('dados').select('atualizado_em').eq('empresa_id',empresaId).maybeSingle();
     if(r.error||!r.data||dirty||saving)return;
     if(lastRemote&&new Date(r.data.atualizado_em)>new Date(lastRemote)){
-      aplicar(r.data.conteudo);lastRemote=r.data.atualizado_em;render();
+      var f=await client.from('dados').select('conteudo,atualizado_em').eq('empresa_id',empresaId).maybeSingle();
+      if(f.error||!f.data||dirty||saving)return;
+      aplicar(f.data.conteudo);lastRemote=f.data.atualizado_em;render();
     }
   }catch(e){}
 }
@@ -1110,6 +1130,9 @@ async function entrar(u){
     var e=await client.from('empresas').select('nome').eq('id',empresaId).maybeSingle();
     var nm=(e.data&&e.data.nome)||nome;
     if(nm){db.empresa=Object.assign({},db.empresa,{nome:nm});try{localStorage.setItem(K,JSON.stringify(db))}catch(x){};precisaEnviar=true}
+  }
+  if(db.empresa&&db.empresa.logo&&db.empresa.logo.length>200000){
+    try{db.empresa.logo=await window.otimizarLogo(db.empresa.logo);try{localStorage.setItem(K,JSON.stringify(db))}catch(x){};precisaEnviar=true}catch(x){}
   }
   montaTopo();gate.hidden=true;render();status('ok');
   if(precisaEnviar){ver++;dirty=true;await enviar()}
