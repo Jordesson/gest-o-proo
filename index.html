@@ -382,7 +382,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     </div>
 
     <div data-view="signup" hidden>
-      <p class="ag-sub">Crie a conta da sua empresa.</p>
+      <p class="ag-sub">Crie a conta da sua empresa. Depois do cadastro, o acesso passa por aprovação.</p>
       <form data-form="signup" autocomplete="on">
         <label>Nome da empresa<input name="empresa" type="text" required maxlength="120" autocomplete="organization"></label>
         <label>E-mail<input name="email" type="email" required autocomplete="email" inputmode="email"></label>
@@ -407,6 +407,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
         <label>Nova senha (mínimo 8 caracteres)<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
         <button class="ag-main" type="submit">Salvar senha</button>
       </form>
+    </div>
+
+    <div data-view="pendente" hidden>
+      <p class="ag-sub"><b>Cadastro recebido!</b><br>Sua conta está aguardando a liberação do administrador. Assim que for aprovada, é só tocar em "Verificar novamente".</p>
+      <button class="ag-main" type="button" data-recheck>Verificar novamente</button>
+      <div class="ag-links"><a data-wa hidden target="_blank" rel="noopener">Falar com o suporte</a><a data-sair>Sair</a></div>
+    </div>
+
+    <div data-view="suspenso" hidden>
+      <p class="ag-sub"><b>Acesso suspenso.</b><br>Fale com o suporte para regularizar a sua conta.</p>
+      <button class="ag-main" type="button" data-recheck>Verificar novamente</button>
+      <div class="ag-links"><a data-wa hidden target="_blank" rel="noopener">Falar com o suporte</a><a data-sair>Sair</a></div>
     </div>
 
     <div data-view="error" hidden>
@@ -992,6 +1004,14 @@ var SB_URL='https://vvouoeybdqqrpwbqxkru.supabase.co', SB_KEY='eyJhbGciOiJIUzI1N
 var OWNER_KEY='gestaopro_owner_v1';
 var LISTAS=['clientes','lanc','prod','orc','fornecedores','compras','caixas','caixaMov','movEstoque','usuarios','devolucoes'];
 var gate=document.getElementById('auth-gate');
+/* Cadastro aberto, mas toda empresa nova nasce 'pendente' e so usa o sistema depois que o administrador libera (regra no banco). */
+var PERMITE_CADASTRO=(window.GP_PERMITE_CADASTRO!==false);
+var SUPORTE_WHATSAPP='5588921002123';   // ex.: '5585999999999' (so numeros, com DDI e DDD) - mostra o botao "Falar com o suporte"
+if(!PERMITE_CADASTRO){
+  gate.querySelectorAll('[data-go="signup"]').forEach(function(a){a.remove()});
+  var sv=gate.querySelector('[data-view="signup"]');if(sv)sv.remove();
+  var sub=gate.querySelector('[data-view="login"] .ag-sub');if(sub)sub.textContent='Acesso exclusivo para clientes cadastrados.';
+}
 var client=null,user=null,empresaId=null,timer=null,saving=false,dirty=false,ver=0,lastRemote=null,statusEl=null;
 
 function g(sel){return gate.querySelector(sel)}
@@ -1006,6 +1026,7 @@ function traduz(e){
   if(t.indexOf('already registered')>-1)return 'Este e-mail já tem cadastro. Use "Entrar".';
   if(t.indexOf('at least')>-1||t.indexOf('weak')>-1)return 'A senha é muito curta ou fraca. Use ao menos 8 caracteres.';
   if(t.indexOf('rate limit')>-1||t.indexOf('too many')>-1||t.indexOf('security purposes')>-1)return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+  if(t.indexOf('signups not allowed')>-1||t.indexOf('signup is disabled')>-1||t.indexOf('signups are disabled')>-1)return 'Novos cadastros estão desativados. Fale com o suporte para criar o seu acesso.';
   if(t.indexOf('fetch')>-1||t.indexOf('network')>-1||t.indexOf('failed to')>-1)return 'Sem conexão com o servidor. Verifique a internet.';
   if(t.indexOf('same password')>-1||t.indexOf('different from the old')>-1)return 'Escolha uma senha diferente da anterior.';
   return 'Não foi possível concluir. Tente novamente.';
@@ -1021,8 +1042,12 @@ window.otimizarLogo=function(src,max){
       var cw=Math.max(1,Math.round(w*s)),ch=Math.max(1,Math.round(h*s));
       var c=document.createElement('canvas');c.width=cw;c.height=ch;
       c.getContext('2d').drawImage(im,0,0,cw,ch);
-      var out=c.toDataURL('image/webp',0.85);
-      if(out.indexOf('data:image/webp')!==0)out=c.toDataURL('image/png');
+      var g=c.getContext('2d').getImageData(0,0,cw,ch).data,transp=false;
+      for(var i=3;i<g.length;i+=4){if(g[i]<250){transp=true;break}}
+      var cand=[c.toDataURL('image/png')];
+      var w2=c.toDataURL('image/webp',0.85);if(w2.indexOf('data:image/webp')===0)cand.push(w2);
+      if(!transp){var j=c.toDataURL('image/jpeg',0.88);if(j.indexOf('data:image/jpeg')===0)cand.push(j)}
+      var out=cand.reduce(function(a,b){return b.length<a.length?b:a});
       res(out.length<src.length?out:src);
     };
     im.onerror=function(){rej(new Error('imagem invalida'))};
@@ -1113,6 +1138,15 @@ async function entrar(u){
   if(r.error)throw r.error;
   empresaId=r.data;
 
+  // empresa ainda nao liberada (ou suspensa): nao carrega nem envia nada
+  var st=await client.from('empresas').select('assinatura_status').eq('id',empresaId).maybeSingle();
+  var statusEmp=(st.data&&st.data.assinatura_status)||'teste';
+  if(statusEmp==='pendente'||statusEmp==='suspensa'){
+    empresaId=null;
+    show(statusEmp==='pendente'?'pendente':'suspenso');
+    return;
+  }
+
   // cache local de OUTRA empresa nunca pode vazar para esta conta
   var dono=null;try{dono=localStorage.getItem(OWNER_KEY)}catch(e){}
   if(dono&&String(dono)!==String(empresaId)){aplicar(defaults())}
@@ -1131,8 +1165,10 @@ async function entrar(u){
     var nm=(e.data&&e.data.nome)||nome;
     if(nm){db.empresa=Object.assign({},db.empresa,{nome:nm});try{localStorage.setItem(K,JSON.stringify(db))}catch(x){};precisaEnviar=true}
   }
-  if(db.empresa&&db.empresa.logo&&db.empresa.logo.length>200000){
-    try{db.empresa.logo=await window.otimizarLogo(db.empresa.logo);try{localStorage.setItem(K,JSON.stringify(db))}catch(x){};precisaEnviar=true}catch(x){}
+  if(db.empresa&&db.empresa.logo&&db.empresa.logo.length>60000){
+    try{var antes=db.empresa.logo.length,novo=await window.otimizarLogo(db.empresa.logo);
+      if(novo.length<antes*0.9){db.empresa.logo=novo;try{localStorage.setItem(K,JSON.stringify(db))}catch(x){};precisaEnviar=true}
+    }catch(x){}
   }
   montaTopo();gate.hidden=true;render();status('ok');
   if(precisaEnviar){ver++;dirty=true;await enviar()}
@@ -1150,6 +1186,11 @@ async function sairConta(){
 /* ---------- formularios ---------- */
 function busy(form,on){var b=form.querySelector('button[type=submit]');if(b)b.disabled=on}
 gate.addEventListener('click',function(ev){
+  if(ev.target.closest('[data-recheck]')){
+    if(user){show('loading');entrar(user).catch(function(e){console.error(e);show('pendente');msg(traduz(e))})}
+    return;
+  }
+  if(ev.target.closest('[data-sair]')){sairConta();return}
   var a=ev.target.closest('[data-go]');if(a){ev.preventDefault();show(a.getAttribute('data-go'));return}
   if(ev.target.id==='ag-retry'){location.reload()}
 });
@@ -1167,7 +1208,7 @@ gate.addEventListener('submit',async function(ev){
       var s=await client.auth.signUp({email:f.email.trim(),password:f.password,options:{data:{empresa:f.empresa.trim()},emailRedirectTo:location.origin+location.pathname}});
       if(s.error)throw s.error;
       if(s.data&&s.data.session){await entrar(s.data.user)}
-      else{show('login');msg('Conta criada! Enviamos um link de confirmação para o seu e-mail. Confirme e depois entre.',true)}
+      else{show('login');msg('Conta criada! Enviamos um link de confirmação para o seu e-mail. Confirme, entre e aguarde a liberação do acesso.',true)}
     }else if(kind==='forgot'){
       var p=await client.auth.resetPasswordForEmail(f.email.trim(),{redirectTo:location.origin+location.pathname});
       if(p.error)throw p.error;
@@ -1198,7 +1239,7 @@ async function boot(){
     if(ev==='PASSWORD_RECOVERY'){show('newpass')}
     if(ev==='SIGNED_OUT'&&empresaId){location.reload()}   // sessao expirou ou saiu em outra aba
   });
-  var recovery=/type=recovery/.test(location.hash||'');
+  var recovery=/type=(recovery|invite)/.test(location.hash||'');
   try{
     var r=await client.auth.getSession();
     var sess=r&&r.data&&r.data.session;
@@ -1210,6 +1251,7 @@ async function boot(){
     show('error');
   }
 }
+if(SUPORTE_WHATSAPP){gate.querySelectorAll('[data-wa]').forEach(function(a){a.hidden=false;a.href='https://wa.me/'+SUPORTE_WHATSAPP+'?text='+encodeURIComponent('Olá! Fiz o cadastro no GESTÃO PRO e gostaria de liberar o meu acesso.')})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
 </script>
