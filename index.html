@@ -734,10 +734,10 @@ orc(){
   <div class="act"><span class="tag ${o.status=='Aprovado'?'l':'p'}">${o.status}</span><button class="btn s" data-act="over" data-id="${o.id}">Ver orçamento</button><button class="btn s" data-act="pord" data-id="${o.id}">🖨 Imprimir</button><button class="btn s" data-act="owa" data-id="${o.id}">WhatsApp</button>${o.status!='Aprovado'?`<button class="btn s" data-act="oap" data-id="${o.id}">Aprovar</button>`:''}<button class="btn s d" data-act="delo" data-id="${o.id}">✕</button></div></div>`).join(''):'<div class="empty">Nenhum orçamento ainda.</div>'}</div>`},
 rel(){
   const L=db.lanc.filter(l=>l.data.startsWith(mes)&&l.pago).sort((a,b)=>a.data.localeCompare(b.data));
-  const r=sum(L.filter(l=>l.tipo=='receita')),d=sum(L.filter(l=>l.tipo=='despesa')),compEst=sum(L.filter(l=>l.tipo=='despesa'&&isCompraEstoque(l))),dOp=d-compEst,cmvM=cmvPeriodo(x=>x.startsWith(mes)),lBruto=r-cmvM,lLiq=lBruto-dOp;
+  const r=sum(L.filter(l=>l.tipo=='receita')),d=sum(L.filter(l=>l.tipo=='despesa')),compEst=sum(L.filter(l=>l.tipo=='despesa'&&isCompraEstoque(l))),dOp=d-compEst,cmvM=cmvPeriodo(x=>x.startsWith(mes)),perdaM=perdaPeriodo(x=>x.startsWith(mes)),lBruto=r-cmvM,lLiq=lBruto-perdaM-dOp;
   return `<div class="card report-export"><h2>Exportação de dados</h2><p class="muted-inline">Baixe dados em CSV para abrir no Excel.</p><div class="heading-actions"><button class="btn s" data-act="exportcsv" data-export-type="vendas">Vendas</button><button class="btn s" data-act="exportcsv" data-export-type="financeiro">Financeiro</button><button class="btn s" data-act="exportcsv" data-export-type="produtos">Produtos</button><button class="btn s" data-act="exportcsv" data-export-type="clientes">Clientes</button><button class="btn s" data-act="exportcsv" data-export-type="compras">Compras</button><button class="btn s" data-act="exportcsv" data-export-type="devolucoes">Devoluções</button></div></div><div class="card"><h2>Relatório financeiro — ${mes.split('-').reverse().join('/')}</h2>
   <div class="bar2 noprint"><label>Mês: <input type="month" id="mes" value="${mes}"></label><button class="btn" data-act="prt">🖨 Imprimir relatório / salvar PDF</button></div>
-  <div class="grid"><div class="kpi"><small>Receitas</small><strong class="ok">${brl(r)}</strong></div><div class="kpi"><small>Custo das mercadorias vendidas</small><strong class="bad">${brl(cmvM)}</strong></div><div class="kpi"><small>Lucro bruto</small><strong class="${lBruto<0?'bad':'ok'}">${brl(lBruto)}</strong></div><div class="kpi"><small>Despesas (sem compra de estoque)</small><strong class="bad">${brl(dOp)}</strong></div><div class="kpi"><small>Lucro líquido</small><strong class="${lLiq<0?'bad':'ok'}">${brl(lLiq)}</strong></div><div class="kpi"><small>Compras de estoque (não entram no lucro)</small><strong>${brl(compEst)}</strong></div><div class="kpi"><small>Saldo de caixa do mês</small><strong>${brl(r-d)}</strong></div></div>
+  <div class="grid"><div class="kpi"><small>Receitas</small><strong class="ok">${brl(r)}</strong></div><div class="kpi"><small>Custo das mercadorias vendidas</small><strong class="bad">${brl(cmvM)}</strong></div><div class="kpi"><small>Lucro bruto</small><strong class="${lBruto<0?'bad':'ok'}">${brl(lBruto)}</strong></div><div class="kpi"><small>Despesas (sem compra de estoque)</small><strong class="bad">${brl(dOp)}</strong></div><div class="kpi"><small>Perdas de estoque (contagem)</small><strong class="bad">${brl(perdaM)}</strong></div><div class="kpi"><small>Lucro líquido</small><strong class="${lLiq<0?'bad':'ok'}">${brl(lLiq)}</strong></div><div class="kpi"><small>Compras de estoque (não entram no lucro)</small><strong>${brl(compEst)}</strong></div><div class="kpi"><small>Saldo de caixa do mês</small><strong>${brl(r-d)}</strong></div></div>
   ${L.length?L.map(l=>`<div class="row"><div class="i"><b>${esc(l.desc)}</b><small>${fd(l.data)}</small></div><strong class="${l.tipo=='receita'?'ok':'bad'}">${l.tipo=='receita'?'+':'−'} ${brl(l.valor)}</strong></div>`).join(''):'<div class="empty">Sem lançamentos pagos neste mês.</div>'}</div>`},
 dados(){
   const e=db.empresa||{};
@@ -1000,6 +1000,396 @@ document.addEventListener('change',e=>{
 render();
 if(tab==='vendas')addSaleRow();
 calcularPreco();
+/* ===== PRO: compras com varios itens, conciliacao de estoque e painel ===== */
+(function(){
+const R=v=>brl(Number(v)||0);
+const r2=v=>Math.round((Number(v)||0)*100)/100;
+const isoMes=d=>String(d||'').slice(0,7);
+const addMeses=(iso,n)=>{const [y,m,d]=String(iso||hoje()).split('-').map(Number);const dt=new Date(Date.UTC(y,(m-1)+n,1));const last=new Date(Date.UTC(dt.getUTCFullYear(),dt.getUTCMonth()+1,0)).getUTCDate();dt.setUTCDate(Math.min(d||1,last));return dt.toISOString().slice(0,10)};
+
+/* ---------- CSS ---------- */
+const st=document.createElement('style');st.id='pro-css';st.textContent=`
+#fcompra2{display:block!important}#fcompra2 .cmp-row select,#fcompra2 .cmp-row input,#fcompra2 .cmp-grid select,#fcompra2 .cmp-grid input{width:100%;min-width:0;box-sizing:border-box}#fcompra2>.btn.full{width:100%;margin-top:6px}#cmp-itens{margin-bottom:8px}.cmp-total span{white-space:nowrap}
+.cmp-row{display:grid;grid-template-columns:minmax(160px,2fr) minmax(70px,.6fr) minmax(90px,.9fr) minmax(90px,.9fr) minmax(70px,.6fr) minmax(90px,.8fr) auto;gap:8px;align-items:center;margin-bottom:8px}
+.cmp-row .cmp-nome{grid-column:1/-1}
+.cmp-sub{font-weight:700;text-align:right;white-space:nowrap}
+.cmp-head{display:grid;grid-template-columns:minmax(160px,2fr) minmax(70px,.6fr) minmax(90px,.9fr) minmax(90px,.9fr) minmax(70px,.6fr) minmax(90px,.8fr) auto;gap:8px;font-size:11px;color:var(--mut);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.cmp-total{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;border-radius:10px;background:rgba(80,200,150,.10);font-weight:700;margin:10px 0}
+.cmp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
+.cmp-items-list{margin:6px 0 0;padding:0;list-style:none;font-size:12px;color:var(--mut)}
+.pro-chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}
+.pro-chip.ok{background:rgba(60,200,120,.18);color:#4fd68a}.pro-chip.warn{background:rgba(255,190,60,.18);color:#ffc24d}.pro-chip.bad{background:rgba(255,82,107,.18);color:#ff7a8d}
+.cnt-sum{display:flex;gap:18px;flex-wrap:wrap;padding:12px;border-radius:10px;background:rgba(120,140,170,.10);margin:12px 0;font-size:13px}
+.cnt-sum b{display:block;font-size:16px}
+.cnt-form{display:grid;grid-template-columns:2fr 1fr auto;gap:8px;align-items:center}
+.cnt-in{max-width:110px}
+.dre{display:flex;flex-direction:column;gap:2px}
+.dre-l{display:flex;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid var(--ln,rgba(255,255,255,.08));font-size:14px}
+.dre-l.sub{font-weight:700;border-top:1px solid var(--ln,rgba(255,255,255,.18))}
+.dre-l.tot{font-weight:800;font-size:16px;border-bottom:0}
+.dre-l small{color:var(--mut);display:block;font-weight:400}
+.dre-note{font-size:12px;color:var(--mut);margin-top:10px}
+.pro-list-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--ln,rgba(255,255,255,.08));font-size:13px}
+.pro-list-row small{display:block;color:var(--mut)}
+.pro-bar{height:7px;border-radius:99px;background:rgba(120,140,170,.18);overflow:hidden;margin-top:5px}.pro-bar i{display:block;height:100%;background:#3ccf91}
+@media(max-width:760px){.cmp-row,.cmp-head{grid-template-columns:1fr 1fr}.cmp-head{display:none}.cnt-form{grid-template-columns:1fr}.cnt-in{max-width:none}}
+`;document.head.appendChild(st);
+
+/* ---------- apoio ---------- */
+const itensDe=x=>Array.isArray(x.itens)&&x.itens.length?x.itens:[{produto:x.produto,produtoNome:x.produtoNome,qtd:Number(x.qtd)||0,custo:Number(x.custo)||0,total:Number(x.total)||0}];
+const lancsDe=x=>(db.lanc||[]).filter(l=>l.compraId===x.id);
+const pagoCompra=x=>{const ls=lancsDe(x);return ls.length?ls.every(l=>l.pago):!!x.pago};
+const stockList=()=>(db.prod||[]).filter(p=>(p.tipo||'produto')==='produto');
+window.perdaPeriodo=function(inP){return r2((db.contagens||[]).filter(c=>inP(c.data||'')).reduce((a,c)=>a+(Number(c.totalFalta)||0)-(Number(c.totalSobra)||0),0))};
+
+/* ---------- COMPRAS ---------- */
+function cmpRow(){const prods=stockList();return `<div class="cmp-row"><select class="cmp-prod" required><option value="">Selecione o produto</option><option value="__novo">➕ Novo produto (cadastrar agora)</option>${prods.map(p=>`<option value="${p.id}" data-preco="${Number(p.preco)||0}">${esc(p.nome)} · estoque ${Number(p.qtd||0)}</option>`).join('')}</select><input class="cmp-qtd" type="number" min="1" step="1" value="1" required aria-label="Quantidade"><input class="cmp-custo" type="number" min="0" step="0.01" required placeholder="Custo unit. (R$)" aria-label="Custo unitário"><input class="cmp-preco" type="number" min="0" step="0.01" placeholder="Preço de venda (R$)" aria-label="Preço de venda"><input class="cmp-margem" type="number" step="any" placeholder="Margem %" aria-label="Margem"><span class="cmp-sub">R$ 0,00</span><button type="button" class="btn s d" data-act="cmp-rmrow" title="Remover item">✕</button><input class="cmp-nome" placeholder="Nome do novo produto" style="display:none"></div>`}
+function cmpTotais(){const f=document.getElementById('fcompra2');if(!f)return;let bruto=0;f.querySelectorAll('.cmp-row').forEach(r=>{const q=+r.querySelector('.cmp-qtd').value||0,c=+r.querySelector('.cmp-custo').value||0;bruto+=q*c;r.querySelector('.cmp-sub').textContent=R(q*c)});const fr=+(f.elements.frete.value||0);const out=document.getElementById('cmp-total');if(out)out.innerHTML=`<span>Itens: ${R(bruto)}</span><span>Frete/outros: ${R(fr)}</span><span>Total da compra: ${R(bruto+fr)}</span>`}
+
+views.compras=function(){
+  const rows=(db.compras||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')||String(b.numero||'').localeCompare(String(a.numero||'')));
+  const pend=(db.lanc||[]).filter(l=>l.compraId&&!l.pago);const hojeISO=hoje();
+  const vencido=pend.filter(l=>(l.data||'')<hojeISO);
+  const mesTot=rows.filter(x=>isoMes(x.data)===isoMes(hojeISO)).reduce((a,x)=>a+Number(x.total||0),0);
+  const forn=(db.fornecedores||[]);
+  return `<div class="dashboard module-page"><div class="page-heading"><div><div class="eyebrow">ENTRADAS E REPOSIÇÃO</div><h1>Compras</h1><p>Uma compra pode ter vários produtos. Tudo entra no estoque e o pagamento fica no contas a pagar.</p></div><div class="heading-actions"><button class="btn s" data-act="exportcsv" data-export-type="compras">Exportar CSV</button></div></div>
+  <div class="grid module-kpis"><div class="kpi card"><small>Compras no mês</small><strong>${R(mesTot)}</strong></div><div class="kpi card"><small>A pagar (compras)</small><strong>${R(pend.reduce((a,l)=>a+Number(l.valor||0),0))}</strong></div><div class="kpi card"><small>Vencidas</small><strong class="${vencido.length?'bad':''}">${R(vencido.reduce((a,l)=>a+Number(l.valor||0),0))}</strong></div><div class="kpi card"><small>Compras registradas</small><strong>${rows.length}</strong></div></div>
+  <section class="card"><h2>Nova compra</h2>${!forn.length?'<div class="notice"><strong>Sem fornecedor cadastrado</strong><p>Cadastre o fornecedor na aba <button type="button" class="text-action" data-tab="fornecedores">Fornecedores</button> antes de lançar a compra.</p></div>':''}
+  <form id="fcompra2"><div class="cmp-grid"><select name="fornecedor" required><option value="">Fornecedor</option>${forn.map(x=>`<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><input name="data" type="date" value="${hoje()}" required aria-label="Data da compra" title="Data da compra"><input name="nf" placeholder="Nota fiscal / pedido (opcional)"><input name="frete" type="number" min="0" step="0.01" placeholder="Frete / outras despesas (R$)" title="Frete e outras despesas: são rateados no custo dos produtos"></div>
+  <div class="cmp-head"><span>Produto</span><span>Qtd</span><span>Custo unit.</span><span>Preço venda</span><span>Margem %</span><span style="text-align:right">Subtotal</span><span></span></div>
+  <div id="cmp-itens">${cmpRow()}</div><button type="button" class="btn s" data-act="cmp-addrow">+ Adicionar outro produto</button>
+  <div class="cmp-total" id="cmp-total"><span>Itens: R$ 0,00</span><span>Frete/outros: R$ 0,00</span><span>Total da compra: R$ 0,00</span></div>
+  <div class="cmp-grid"><select name="pago"><option value="">Pagamento pendente (a pagar)</option><option value="1">Já pago</option></select><select name="forma"><option value="">Forma de pagamento</option><option>Dinheiro</option><option>Pix</option><option>Cartão</option><option>Boleto</option><option>Transferência</option></select><input name="vencimento" type="date" value="${hoje()}" required aria-label="Vencimento" title="Vencimento (ou da 1ª parcela)"><select name="parcelas" title="Parcelas (só para pagamento pendente)">${[1,2,3,4,5,6,8,10,12].map(n=>`<option value="${n}">${n===1?'À vista / 1 parcela':n+' parcelas'}</option>`).join('')}</select></div>
+  <textarea name="obs" rows="2" placeholder="Observações" style="width:100%;margin-bottom:10px"></textarea>
+  <button class="btn full">Registrar compra e dar entrada no estoque</button></form></section>
+  <section class="card"><div class="panel-heading"><h2>Histórico de compras</h2><input id="busca-compras" class="section-search" placeholder="Buscar compra..."></div>${rows.length?rows.map(x=>{const its=itensDe(x),ls=lancsDe(x),pg=pagoCompra(x),proxVenc=ls.filter(l=>!l.pago).map(l=>l.data).sort()[0];
+    return `<div class="data-row" data-search-group="compras" data-q="${esc([x.fornecedorNome,x.produtoNome,its.map(i=>i.produtoNome).join(' '),x.data,x.obs,x.nf,x.id].join(' '))}"><div class="data-row-copy"><strong>Compra #${esc(x.numero||String(x.id).slice(-5))} · ${esc(x.fornecedorNome||'Fornecedor não informado')}</strong><small>${fd(x.data||hoje())}${x.nf?' · NF/pedido '+esc(x.nf):''} · ${its.reduce((a,i)=>a+Number(i.qtd||0),0)} un. · ${its.length} produto(s)</small><ul class="cmp-items-list">${its.map(i=>`<li>${Number(i.qtd||0)} × ${esc(i.produtoNome||'Produto')} · ${R(i.custo)}</li>`).join('')}</ul><small><span class="pro-chip ${pg?'ok':((proxVenc||'')<hoje()?'bad':'warn')}">${pg?'Paga':((proxVenc||'')<hoje()?'Vencida':'A pagar')}</span>${proxVenc&&!pg?' · próximo venc. '+fd(proxVenc):''}${ls.length>1?' · '+ls.length+' parcelas':''}${x.obs?' · '+esc(x.obs):''}</small></div><div class="data-row-value"><strong>${R(x.total||0)}</strong>${Number(x.frete)>0?`<small>inclui frete ${R(x.frete)}</small>`:''}<div class="act" style="margin-top:6px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap"><button class="btn s" data-act="cmp-pay" data-id="${x.id}">${pg?'Marcar como pendente':'Marcar como paga'}</button><button class="btn s d" data-act="cmp-del" data-id="${x.id}">Estornar</button></div></div></div>`}).join(''):'<div class="empty">Nenhuma compra registrada.</div>'}</section></div>`;
+};
+
+function salvarCompra(f){
+  const fornecedor=(db.fornecedores||[]).find(x=>String(x.id)===String(f.elements.fornecedor.value));if(!fornecedor)return alert('Selecione o fornecedor.');
+  const linhas=[...f.querySelectorAll('.cmp-row')].map(r=>({sel:r.querySelector('.cmp-prod').value,nome:r.querySelector('.cmp-nome').value.trim(),qtd:+r.querySelector('.cmp-qtd').value||0,custo:+r.querySelector('.cmp-custo').value||0,preco:+r.querySelector('.cmp-preco').value||0,margem:r.querySelector('.cmp-margem').value}));
+  if(!linhas.length)return alert('Adicione ao menos um produto.');
+  const nomesNovos=[];
+  for(const l of linhas){
+    if(!l.sel)return alert('Selecione o produto em todas as linhas.');
+    if(!Number.isInteger(l.qtd)||l.qtd<1)return alert('A quantidade precisa ser um número inteiro maior que zero.');
+    if(l.custo<0)return alert('Confira o custo dos produtos.');
+    if(l.sel==='__novo'){const n=l.nome.toLowerCase();if(!l.nome)return alert('Informe o nome do novo produto.');if(stockList().some(p=>String(p.nome||'').trim().toLowerCase()===n)||nomesNovos.includes(n))return alert('Já existe um produto chamado "'+l.nome+'". Escolha-o na lista.');nomesNovos.push(n)}
+  }
+  const frete=Math.max(0,+f.elements.frete.value||0),data=f.elements.data.value||hoje(),venc=f.elements.vencimento.value||data;
+  const bruto=linhas.reduce((a,l)=>a+l.qtd*l.custo,0),qtdTotal=linhas.reduce((a,l)=>a+l.qtd,0);
+  const numero=String(Math.max(0,...(db.compras||[]).map(x=>Number(x.numero)||0))+1).padStart(5,'0');
+  const compraId=uid(),itens=[];
+  linhas.forEach(l=>{
+    const share=bruto>0?(l.qtd*l.custo)/bruto:l.qtd/qtdTotal;const custoEfExato=(l.qtd*l.custo+frete*share)/l.qtd;
+    let p;
+    if(l.sel==='__novo'){
+      const mg=l.preco>0&&custoEfExato>0?r2((1-custoEfExato/l.preco)*100):Math.min(99,Math.max(0,l.margem===''?30:+l.margem||0));
+      p={id:uid(),tipo:'produto',nome:l.nome,custo:r2(custoEfExato),margem:mg,imposto:0,taxas:0,extras:0,qtd:0,min:0,preco:l.preco>0?l.preco:r2(custoEfExato/(1-mg/100)),codigo:'',codigoBarras:'',categoria:'',unidade:'un',localizacao:'',fornecedorNome:fornecedor.nome||'',ncm:'',cest:''};db.prod.push(p);
+    }else{p=db.prod.find(x=>String(x.id)===String(l.sel));}
+    const antes=Math.max(0,Number(p.qtd)||0),custoAntes=Number(p.custo)||0;
+    p.qtd=(Number(p.qtd)||0)+l.qtd;
+    p.custo=r2(((antes*custoAntes)+(l.qtd*custoEfExato))/Math.max(1,antes+l.qtd));
+    if(l.sel!=='__novo'&&l.preco>0){p.preco=l.preco;const ex=(Number(p.imposto)||0)+(Number(p.taxas)||0)+(Number(p.extras)||0);p.margem=r2((1-p.custo/l.preco)*100-ex)}
+    logStockMove(p,l.qtd,'entrada','Compra #'+numero,'Compra de '+(fornecedor.nome||'fornecedor'),data);
+    itens.push({produto:p.id,produtoNome:p.nome,qtd:l.qtd,custo:r2(custoEfExato),custoNota:l.custo,total:r2(l.qtd*custoEfExato)});
+  });
+  const total=r2(bruto+frete),pago=f.elements.pago.value==='1',forma=f.elements.forma.value||'';
+  const resumo=itens.length===1?itens[0].produtoNome:itens[0].produtoNome+' +'+(itens.length-1)+' item(ns)';
+  db.compras.push({id:compraId,numero,data,vencimento:venc,fornecedor:fornecedor.id,fornecedorNome:fornecedor.nome||'',produto:itens[0].produto,produtoNome:resumo,qtd:qtdTotal,custo:r2(total/qtdTotal),total,frete,nf:f.elements.nf.value.trim(),pago,forma,obs:f.elements.obs.value.trim(),itens,parcelas:pago?1:(+f.elements.parcelas.value||1)});
+  const n=pago?1:Math.max(1,Math.min(12,+f.elements.parcelas.value||1));let acum=0;const cx=forma==='Dinheiro'&&pago&&typeof activeCash==='function'?activeCash():null;
+  for(let i=0;i<n;i++){const v=i===n-1?r2(total-acum):r2(total/n);acum=r2(acum+v);
+    db.lanc.push({id:uid(),tipo:'despesa',desc:'Compra #'+numero+' · '+(fornecedor.nome||'Fornecedor')+(n>1?' · parcela '+(i+1)+'/'+n:''),valor:v,data:n>1?addMeses(venc,i):venc,pago,fornecedor:fornecedor.id,compraId,categoria:'Mercadorias',forma,parcela:i+1,parcelas:n,caixaId:cx?cx.id:''})}
+  mes=venc.slice(0,7);save();render();
+  alert('Compra #'+numero+' registrada. '+itens.length+' produto(s) entraram no estoque.');
+}
+
+/* ---------- CONCILIACAO ---------- */
+function contagemHtml(){
+  const stock=stockList().slice().sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||'')));
+  const hist=(db.contagens||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')||String(b.id).localeCompare(String(a.id))).slice(0,5);
+  return `<section class="card" id="cnt-box"><div class="panel-heading"><div><h2>Conciliação de estoque (contagem física)</h2><p class="muted-inline">Conte as unidades na prateleira e digite aqui. O sistema mostra a diferença e, ao confirmar, ajusta o estoque com registro.</p></div></div>
+  ${stock.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Produto</th><th>No sistema</th><th>Contado</th><th>Diferença</th><th>Valor (custo)</th></tr></thead><tbody>${stock.map(p=>`<tr><td>${esc(p.nome)}</td><td>${Number(p.qtd||0)}</td><td><input class="cnt-in" type="number" min="0" step="1" data-id="${p.id}" data-sys="${Number(p.qtd||0)}" data-custo="${Number(p.custo)||0}" placeholder="—" aria-label="Contagem de ${esc(p.nome)}"></td><td class="cnt-diff">—</td><td class="cnt-val">—</td></tr>`).join('')}</tbody></table></div>
+  <div class="cnt-sum" id="cnt-sum"><span>Contados<b>0</b></span><span>Com diferença<b>0</b></span><span>Faltas<b>R$ 0,00</b></span><span>Sobras<b>R$ 0,00</b></span></div>
+  <div class="cnt-form"><input id="cnt-motivo" placeholder="Motivo / observação (ex.: inventário de outubro)"><input id="cnt-data" type="date" value="${hoje()}" aria-label="Data da contagem"><button class="btn" data-act="cnt-apply">Aplicar ajustes da contagem</button></div>
+  <p class="muted-inline" style="margin-top:8px">Deixe em branco o que não contou. Faltas entram como perda de estoque no lucro; sobras entram como ganho.</p>`:'<div class="empty">Cadastre produtos para fazer a contagem.</div>'}
+  ${hist.length?`<h3 style="margin:18px 0 6px">Últimas contagens</h3>${hist.map(c=>`<div class="pro-list-row"><div><b>${fd(c.data)}</b> · ${esc(c.motivo||'Contagem física')}<small>${(c.itens||[]).filter(i=>i.dif!==0).length} divergência(s) em ${(c.itens||[]).length} produto(s) contados</small></div><div style="text-align:right"><span class="bad">Faltas ${R(c.totalFalta)}</span><small>Sobras ${R(c.totalSobra)}</small></div></div>`).join('')}`:''}</section>`;
+}
+const baseInv=views.inventario;
+views.inventario=function(){const h=baseInv();const sec=contagemHtml();const mark='<section class="card"><div class="panel-heading"><h2>Posição atual do estoque</h2>';const i=h.indexOf(mark);return i>=0?h.slice(0,i)+sec+h.slice(i):h.replace(/<\/div>\s*$/,sec+'</div>')};
+function cntAtualiza(){const box=document.getElementById('cnt-box');if(!box)return;let cont=0,div=0,falta=0,sobra=0;box.querySelectorAll('.cnt-in').forEach(inp=>{const tr=inp.closest('tr'),d=tr.querySelector('.cnt-diff'),v=tr.querySelector('.cnt-val');if(inp.value===''){d.textContent='—';d.className='cnt-diff';v.textContent='—';return}const c=Math.max(0,Math.floor(+inp.value||0)),sys=+inp.dataset.sys,dif=c-sys,val=r2(dif*(+inp.dataset.custo||0));cont++;if(dif!==0)div++;d.textContent=dif>0?'+'+dif:String(dif);d.className='cnt-diff '+(dif===0?'ok':(dif<0?'bad':'ok'));v.textContent=dif===0?'—':R(val);if(dif<0)falta+=Math.abs(val);if(dif>0)sobra+=val});falta=r2(falta);sobra=r2(sobra);const s=document.getElementById('cnt-sum');if(s)s.innerHTML=`<span>Contados<b>${cont}</b></span><span>Com diferença<b>${div}</b></span><span>Faltas<b class="bad">${R(falta)}</b></span><span>Sobras<b class="ok">${R(sobra)}</b></span>`}
+function cntAplicar(){const box=document.getElementById('cnt-box');if(!box)return;const itens=[];box.querySelectorAll('.cnt-in').forEach(inp=>{if(inp.value==='')return;const p=db.prod.find(x=>String(x.id)===String(inp.dataset.id));if(!p)return;const sys=Number(p.qtd)||0,c=Math.max(0,Math.floor(+inp.value||0)),dif=c-sys;itens.push({produtoId:p.id,nome:p.nome,sistema:sys,contado:c,dif,custo:Number(p.custo)||0})});
+  if(!itens.length)return alert('Digite a quantidade contada de pelo menos um produto.');
+  const div=itens.filter(i=>i.dif!==0);if(!div.length)return alert('Tudo bate com o sistema. Nenhum ajuste necessário.');
+  const motivo=(document.getElementById('cnt-motivo').value||'').trim()||'Contagem física',data=document.getElementById('cnt-data').value||hoje();
+  const totalFalta=r2(div.filter(i=>i.dif<0).reduce((a,i)=>a+Math.abs(i.dif)*i.custo,0)),totalSobra=r2(div.filter(i=>i.dif>0).reduce((a,i)=>a+i.dif*i.custo,0));
+  if(!confirm('Ajustar '+div.length+' produto(s)?\nFaltas: '+R(totalFalta)+'\nSobras: '+R(totalSobra)+'\nO estoque passará a ser o que você contou.'))return;
+  div.forEach(i=>{const p=db.prod.find(x=>String(x.id)===String(i.produtoId));p.qtd=i.contado;logStockMove(p,i.dif,'ajuste','Contagem física',motivo,data)});
+  db.contagens=db.contagens||[];db.contagens.push({id:uid(),data,motivo,itens,totalFalta,totalSobra});save();render()}
+
+/* ---------- cliques / formularios / inputs ---------- */
+document.addEventListener('click',e=>{
+  const t=e.target.closest&&e.target.closest('[data-act^="cmp-"],[data-act^="cnt-"]');if(!t)return;
+  e.stopPropagation();e.preventDefault();const a=t.dataset.act,id=t.dataset.id;
+  if(a==='cmp-addrow'){const box=document.getElementById('cmp-itens');if(box)box.insertAdjacentHTML('beforeend',cmpRow());return}
+  if(a==='cmp-rmrow'){const rows=document.querySelectorAll('#cmp-itens .cmp-row');if(rows.length>1)t.closest('.cmp-row').remove();cmpTotais();return}
+  if(a==='cmp-pay'){const x=(db.compras||[]).find(c=>c.id===id);if(!x)return;const ls=lancsDe(x),todas=pagoCompra(x);ls.forEach(l=>{l.pago=!todas});x.pago=!todas;save();render();return}
+  if(a==='cmp-del'){const x=(db.compras||[]).find(c=>c.id===id);if(!x)return;const its=itensDe(x);
+    for(const i of its){const p=db.prod.find(q=>String(q.id)===String(i.produto))||db.prod.find(q=>q.nome===i.produtoNome);if(p&&(Number(p.qtd)||0)<Number(i.qtd||0))return alert('Não dá para estornar: parte de "'+p.nome+'" já saiu do estoque (restam '+(Number(p.qtd)||0)+' e a compra trouxe '+i.qtd+').')}
+    if(!confirm('Estornar a compra #'+(x.numero||'')+'?\nO estoque volta ao que era e os lançamentos a pagar são apagados.'))return;
+    its.forEach(i=>{const p=db.prod.find(q=>String(q.id)===String(i.produto))||db.prod.find(q=>q.nome===i.produtoNome);if(p){p.qtd=(Number(p.qtd)||0)-Number(i.qtd||0);logStockMove(p,-Number(i.qtd||0),'saida','Estorno compra #'+(x.numero||''),'Compra estornada')}});
+    db.lanc=db.lanc.filter(l=>l.compraId!==x.id);db.compras=db.compras.filter(c=>c.id!==x.id);save();render();return}
+  if(a==='cnt-apply'){cntAplicar();return}
+},true);
+document.addEventListener('submit',e=>{if(e.target&&e.target.id==='fcompra2'){e.preventDefault();e.stopPropagation();salvarCompra(e.target)}},true);
+document.addEventListener('change',e=>{const s=e.target;if(!s.classList||!s.classList.contains('cmp-prod'))return;const row=s.closest('.cmp-row'),nv=s.value==='__novo',nome=row.querySelector('.cmp-nome'),pr=row.querySelector('.cmp-preco'),mg=row.querySelector('.cmp-margem');
+  nome.style.display=nv?'':'none';nome.required=nv;if(nv){mg.value='30';const c=+row.querySelector('.cmp-custo').value||0;pr.value=c>0?(c/0.7).toFixed(2):'';pr.placeholder='Preço de venda (R$)'}else{mg.value='';pr.value='';const opt=s.options[s.selectedIndex];pr.placeholder=opt&&opt.dataset.preco&&+opt.dataset.preco>0?'Preço atual '+R(+opt.dataset.preco)+' (opcional)':'Preço de venda (R$)'}e.stopPropagation()},true);
+document.addEventListener('input',e=>{const t=e.target;if(!t.classList)return;
+  if(t.closest&&t.closest('#fcompra2')){const row=t.closest('.cmp-row');if(row){const c=+row.querySelector('.cmp-custo').value||0,pr=row.querySelector('.cmp-preco'),mg=row.querySelector('.cmp-margem');
+      if(t.classList.contains('cmp-preco')&&c>0&&+pr.value>0)mg.value=String(r2((1-c/+pr.value)*100));
+      else if((t.classList.contains('cmp-margem')||t.classList.contains('cmp-custo'))&&c>0&&mg.value!==''&&+mg.value<100)pr.value=(c/(1-(+mg.value)/100)).toFixed(2)}
+    cmpTotais();e.stopPropagation();return}
+  if(t.classList.contains('cnt-in')){cntAtualiza();e.stopPropagation()}
+},true);
+
+/* ---------- PAINEL ---------- */
+views.painel=function(){
+  const L=db.lanc||[],todayISO=hoje(),monthKey=new Date().toISOString().slice(0,7);
+  const dateBack=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)};
+  const start7=dateBack(6),start30=dateBack(29),currentYear=String(new Date().getFullYear());
+  const inP=pfInP(),periodoCaption=pfCaption();
+  const pagas=L.filter(l=>l.pago&&inP(l.data));
+  const rec=sum(pagas.filter(l=>l.tipo==='receita')),comprasEst=sum(pagas.filter(l=>l.tipo==='despesa'&&isCompraEstoque(l))),desOp=sum(pagas.filter(l=>l.tipo==='despesa'&&!isCompraEstoque(l)));
+  const cmv=cmvPeriodo(inP),perdas=perdaPeriodo(inP),lBruto=rec-cmv,lLiq=lBruto-perdas-desOp;
+  const mBruta=rec>0?lBruto/rec*100:0,mLiq=rec>0?lLiq/rec*100:0;
+  const fmtP=v=>(Math.round(v*10)/10).toLocaleString('pt-BR')+'%';
+  const vendas={};pagas.filter(l=>l.venda&&l.tipo==='receita').forEach(l=>{const k=l.saleId||l.id;vendas[k]=(vendas[k]||0)+(Number(l.valor)||0)});
+  const nVendas=Object.keys(vendas).length,ticket=nVendas?Object.values(vendas).reduce((a,b)=>a+b,0)/nVendas:0;
+  const prodMap={};pagas.filter(l=>l.venda&&l.tipo==='receita'&&!l.servico).forEach(l=>{const k=l.itemProductId||l.itemNome||l.desc;const o=prodMap[k]||(prodMap[k]={nome:l.itemNome||l.desc||'Produto',qtd:0,rec:0,custo:0});o.qtd+=Number(l.itemQtd)||0;o.rec+=Number(l.valor)||0;o.custo+=custoUnitItem(l)*(Number(l.itemQtd)||0)});
+  const top=Object.values(prodMap).map(o=>Object.assign(o,{lucro:o.rec-o.custo})).sort((a,b)=>b.lucro-a.lucro).slice(0,5);const topMax=Math.max(1,...top.map(o=>o.lucro));
+  const stock=stockList(),valCusto=stock.reduce((a,p)=>a+(Number(p.qtd)||0)*(Number(p.custo)||0),0),valVenda=stock.reduce((a,p)=>a+(Number(p.qtd)||0)*(Number(p.preco)||0),0);
+  const repor=stock.filter(p=>(Number(p.qtd)||0)<=(Number(p.min)||0)).sort((a,b)=>(Number(a.qtd)||0)-(Number(b.qtd)||0));
+  const pend=L.filter(l=>!l.pago&&l.data).sort((a,b)=>a.data.localeCompare(b.data));const aPagar=sum(pend.filter(l=>l.tipo==='despesa')),aReceber=sum(pend.filter(l=>l.tipo==='receita')),vencidas=pend.filter(l=>l.data<todayISO).length;
+  const cats={};pagas.filter(l=>l.tipo==='despesa'&&!isCompraEstoque(l)).forEach(l=>{const k=l.categoria||'Sem categoria';cats[k]=(cats[k]||0)+(Number(l.valor)||0)});const catList=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6),catMax=Math.max(1,...catList.map(c=>c[1]));
+  const meses=[];for(let i=11;i>=0;i--){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))}
+  const nomesMes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const dt=meses.map(x=>{const f=d=>String(d||'').startsWith(x);const r=sum(L.filter(l=>l.pago&&l.tipo==='receita'&&f(l.data)));const c=cmvPeriodo(f)+perdaPeriodo(f)+sum(L.filter(l=>l.pago&&l.tipo==='despesa'&&!isCompraEstoque(l)&&f(l.data)));return {label:nomesMes[Number(x.slice(5,7))-1],r,c}});
+  const mx=Math.max(1,...dt.flatMap(o=>[o.r,o.c]));
+  const axisCurrency=v=>v>=1000000?'R$ '+(v/1000000).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi':v>=1000?'R$ '+Math.round(v/1000).toLocaleString('pt-BR')+' mil':'R$ '+Math.round(v).toLocaleString('pt-BR');
+  const recent=[];L.filter(l=>l.venda).sort((a,b)=>(b.data||'').localeCompare(a.data||'')).forEach(l=>{const key=l.saleId||l.id;let g=recent.find(x=>x.key===key);if(!g){g={key,data:l.data,cli:l.cli,pago:l.pago,items:[],valor:0};recent.push(g)}g.items.push(l);g.valor+=Number(l.valor)||0});
+  const nomeCliente=id=>(db.clientes.find(c=>String(c.id)===String(id))||{}).nome||'Consumidor final';
+  const d90=new Date();d90.setDate(d90.getDate()-90);const d90iso=d90.toISOString().slice(0,10);const semCompra=db.clientes.filter(c=>!L.some(l=>String(l.cli)===String(c.id)&&l.venda&&(l.data||'')>=d90iso)).length;
+  const empresaNome=String((db.empresa&&db.empresa.nome)||db.emp||'').trim(),greeting=empresaNome||'empreendedor';
+  const shortDate=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const V=valorPainel,card=(cls,ic,label,info,val,b1,b2,fin)=>`<div class="card kpi metric-card ${cls} clickable" data-fin="${fin}" role="button" tabindex="0" title="Clique para ver o detalhe"><div class="metric-top"><span class="metric-icon">${ic}</span><span class="metric-label">${label}</span><span class="metric-info" title="${info}">ⓘ</span></div><strong>${val}</strong><div class="metric-bottom"><span>${b1}</span><span class="metric-trend">${b2}</span></div></div>`;
+  const linha=(txt,val,cls='',sub='',fin='lucro')=>`<div class="dre-l ${cls} clickable" data-fin="${fin}" role="button" tabindex="0"><span>${txt}${sub?`<small>${sub}</small>`:''}</span><b>${val}</b></div>`;
+  return `<div class="dashboard">
+    <section class="welcome-head"><div class="welcome-copy"><div class="today-line">${shortDate}</div><h1>Olá, <span>${esc(greeting)}!</span></h1><p>Resultado real do negócio: lucro depois do custo dos produtos e das despesas.</p></div>
+      <div class="welcome-tools"><div class="period-tabs" role="group" aria-label="Período do painel">${[{id:'hoje',label:'Hoje'},{id:'7dias',label:'7 dias'},{id:'30dias',label:'30 dias'},{id:'mes',label:'Este mês'},{id:'ano',label:'Este ano'}].map(p=>`<button type="button" class="period-tab ${periodoPainel===p.id?'on':''}" data-period="${p.id}" aria-pressed="${periodoPainel===p.id}">${p.label}</button>`).join('')}</div><button type="button" class="value-toggle" data-toggle-values aria-pressed="${mostrarValoresFinanceiros}" title="${mostrarValoresFinanceiros?'Ocultar valores financeiros':'Mostrar valores financeiros'}"><span class="eye-icon" aria-hidden="true">${mostrarValoresFinanceiros?'◉':'◎'}</span>${mostrarValoresFinanceiros?'Ocultar valores':'Mostrar valores'}</button></div>
+    </section>
+    <div class="grid metric-grid">
+      ${card('metric-revenue','↗','FATURAMENTO','Vendas e receitas já recebidas no período',V(rec),periodoCaption,nVendas+' venda(s)','faturamento')}
+      ${card('metric-balance','◈','LUCRO BRUTO','Faturamento menos o custo dos produtos vendidos',V(lBruto),'Margem bruta '+fmtP(mBruta),'● Antes das despesas','lucro')}
+      ${card('metric-expense','↘','DESPESAS','Despesas pagas no período, sem compra de estoque',V(desOp),periodoCaption,'● Sem compra de estoque','despesas')}
+      ${card('metric-profit','⌁','LUCRO LÍQUIDO','Lucro bruto menos despesas e perdas de estoque',V(lLiq),'Margem líquida '+fmtP(mLiq),'● Resultado','lucro')}
+      ${card('metric-receivable','▦','TICKET MÉDIO','Valor médio por venda no período',V(ticket),nVendas+' venda(s)','● Por venda','faturamento')}
+      ${card('metric-payable','⬡','ESTOQUE AO CUSTO','Quanto você tem parado em mercadoria (ao custo)',V(valCusto),'Ao preço de venda: '+V(valVenda),'● '+stock.length+' produto(s)','estoque')}
+    </div>
+    <div class="dash-columns top-panels">
+      <section class="card"><div class="panel-heading"><div><h2>Como chegamos no lucro</h2><p>${periodoCaption}</p></div><button type="button" class="text-action" data-fin="lucro">Ver detalhes</button></div><div class="dre">
+        ${linha('Faturamento',V(rec),'','','faturamento')}${linha('(−) Custo dos produtos vendidos',V(cmv),'','Só o que saiu do estoque, ao custo')}${linha('= Lucro bruto',V(lBruto),'sub')}${linha('(−) Despesas',V(desOp),'','Aluguel, salários, impostos etc.','despesas')}${linha('(−) Perdas de estoque (contagem)',V(perdas))}${linha('= Lucro líquido',V(lLiq),'sub tot')}
+      </div><p class="dre-note">Compras de estoque no período: <b>${V(comprasEst)}</b>. Não entram no lucro porque viram custo quando o produto é vendido, mas saem do caixa.</p></section>
+      <section class="card"><div class="panel-heading"><div><h2>Agenda financeira</h2><p>A pagar ${V(aPagar)} · A receber ${V(aReceber)}${vencidas?` · <span class="bad">${vencidas} vencida(s)</span>`:''}</p></div><button type="button" class="text-action" data-fin="pagar">Ver tudo</button></div>
+        ${pend.length?pend.slice(0,6).map(l=>`<div class="pro-list-row clickable" data-fin="${l.tipo==='despesa'?'pagar':'receber'}" role="button" tabindex="0"><div>${esc(l.desc||(l.tipo==='despesa'?'Despesa':'Receita'))}<small><span class="${l.data<todayISO?'bad':''}">${l.data<todayISO?'Venceu em ':'Vence em '}${fd(l.data)}</span> · ${l.tipo==='despesa'?'a pagar':'a receber'}</small></div><b class="${l.tipo==='despesa'?'bad':'ok'}">${l.tipo==='despesa'?'−':'+'} ${V(l.valor)}</b></div>`).join(''):'<div class="table-empty"><span>✓</span><b>Nada pendente</b><small>Contas a pagar e a receber em dia</small></div>'}
+      </section>
+    </div>
+    <div class="dash-columns top-panels">
+      <section class="card"><div class="panel-heading"><div><h2>Produtos que mais dão lucro</h2><p>${periodoCaption}</p></div><button type="button" class="text-action" data-tab="vendas">Ver vendas</button></div>
+        ${top.length?top.map(o=>`<div class="pro-list-row clickable" data-fin="lucro" role="button" tabindex="0" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(o.nome)}<small>${o.qtd} un. · faturou ${V(o.rec)}</small></span><b class="${o.lucro>=0?'ok':'bad'}">${V(o.lucro)}</b></div><div class="pro-bar"><i style="width:${Math.max(2,Math.max(0,o.lucro)/topMax*100)}%"></i></div></div>`).join(''):'<div class="table-empty"><span>▤</span><b>Sem vendas de produtos no período</b><small>Os campeões de lucro aparecem aqui</small></div>'}
+      </section>
+      <section class="card"><div class="panel-heading"><div><h2>Estoque para repor</h2><p>${repor.length} produto(s) no mínimo ou zerado(s)</p></div><button type="button" class="text-action" data-tab="compras">Fazer compra</button></div>
+        ${repor.length?repor.slice(0,6).map(p=>`<div class="pro-list-row clickable" data-fin="estoque" role="button" tabindex="0"><div>${esc(p.nome)}<small>mínimo ${Number(p.min)||0} un.</small></div><span class="pro-chip ${(Number(p.qtd)||0)<=0?'bad':'warn'}">${Number(p.qtd)||0} em estoque</span></div>`).join(''):'<div class="table-empty"><span>✓</span><b>Estoque em dia</b><small>Nenhum produto abaixo do mínimo</small></div>'}
+      </section>
+    </div>
+    <div class="dash-columns charts-panels">
+      <section class="card chart-card clickable" data-fin="lucro" role="button" tabindex="0" title="Ver a evolução mês a mês"><div class="panel-heading chart-heading"><div><h2>Receitas x Custos e despesas</h2><p>Últimos 12 meses · custo dos produtos vendidos + despesas, sem compra de estoque</p></div><span class="chart-badge">12 MESES</span></div><div class="chart-legend"><span class="legend-item"><i class="legend-green"></i>Receitas</span><span class="legend-item"><i class="legend-red"></i>Custos e despesas</span></div><div class="chart-plot"><div class="chart-y-labels"><span>${axisCurrency(mx)}</span><span>${axisCurrency(mx*.75)}</span><span>${axisCurrency(mx*.5)}</span><span>${axisCurrency(mx*.25)}</span><span>R$ 0</span></div><div class="bars">${dt.map(o=>`<div class="bc"><div class="bp"><i class="bar-revenue" style="height:${Math.max(o.r?2:0,o.r/mx*100)}%" title="Receitas"></i><i class="bar-expense" style="height:${Math.max(o.c?2:0,o.c/mx*100)}%" title="Custos e despesas"></i></div><small>${o.label}</small></div>`).join('')}</div></div><div class="chart-foot"><span><i class="live-dot"></i> Só lançamentos pagos</span><span>${new Date().getFullYear()}</span></div></section>
+      <section class="card"><div class="panel-heading"><div><h2>Para onde vai a despesa</h2><p>${periodoCaption} · sem compra de estoque</p></div><button type="button" class="text-action" data-tab="despesas">Ver despesas</button></div>
+        ${catList.length?catList.map(([n,v])=>`<div class="pro-list-row clickable" data-fin="despesas" role="button" tabindex="0" style="display:block"><div style="display:flex;justify-content:space-between"><span>${esc(n)}</span><b>${V(v)}</b></div><div class="pro-bar"><i style="width:${Math.max(3,v/catMax*100)}%;background:#ff7a8d"></i></div></div>`).join(''):'<div class="table-empty"><span>▤</span><b>Nenhuma despesa no período</b><small>Use a categoria ao lançar para ver aqui</small></div>'}
+      </section>
+    </div>
+    <div class="dash-columns top-panels">
+      <section class="card quick-card"><div class="panel-heading"><div><h2>Acesso rápido</h2><p>Atalhos para tarefas frequentes</p></div></div><div class="quick-grid">
+        <button class="quick-action quick-green" data-tab="vendas"><span>🛒</span><b>Nova venda</b></button>
+        <button class="quick-action quick-blue" data-tab="compras"><span>⇩</span><b>Nova compra</b></button>
+        <button class="quick-action quick-red" data-tab="despesas"><span>▤</span><b>Nova despesa</b></button>
+        <button class="quick-action quick-purple" data-tab="estoque"><span>⬡</span><b>Cadastrar produto</b></button>
+        <button class="quick-action quick-slate" data-tab="inventario"><span>☷</span><b>Contar estoque</b></button>
+        <button class="quick-action quick-teal" data-tab="rel"><span>↗</span><b>Relatório do mês</b></button>
+      </div></section>
+      <section class="card table-card"><div class="panel-heading"><div><h2>Últimas vendas</h2><p>${semCompra} cliente(s) sem compra há mais de 90 dias</p></div><button type="button" class="text-action" data-tab="vendas">Ver todas</button></div>${recent.slice(0,5).length?`<div class="table-scroll"><table class="dash-table"><thead><tr><th>DATA</th><th>CLIENTE</th><th>ITENS</th><th>VALOR</th><th>STATUS</th></tr></thead><tbody>${recent.slice(0,5).map(v=>`<tr><td>${fd(v.data||hoje())}</td><td>${esc(nomeCliente(v.cli))}</td><td>${esc(v.items.map(i=>i.itemNome||i.desc||'Venda').join(', '))}</td><td class="money-cell">${V(v.valor)}</td><td><span class="table-status ${v.pago?'status-paid':'status-pending'}">${v.pago?'Pago':'Pendente'}</span></td></tr>`).join('')}</tbody></table></div>`:'<div class="table-empty"><span>▤</span><b>Nenhuma venda registrada</b><small>Clique em “Nova venda” para começar</small></div>'}</section>
+    </div>
+  </div>`};
+/* ===== FINANCEIRO explicativo + paineis clicaveis ===== */
+let finVista='resumo';
+const pct=(a,b)=>b>0?(Math.round(a/b*1000)/10).toLocaleString('pt-BR')+'%':'—';
+function pfInP(){const todayISO=hoje(),monthKey=new Date().toISOString().slice(0,7);const dateBack=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)};const s7=dateBack(6),s30=dateBack(29),yr=String(new Date().getFullYear());return v=>{const d=String(v||'');if(!d)return false;switch(periodoPainel){case 'hoje':return d===todayISO;case '7dias':return d>=s7&&d<=todayISO;case '30dias':return d>=s30&&d<=todayISO;case 'ano':return d.startsWith(yr);default:return d.startsWith(monthKey)}}}
+const pfCaption=()=>({'hoje':'Hoje','7dias':'Últimos 7 dias','30dias':'Últimos 30 dias','mes':'Este mês','ano':'Este ano'})[periodoPainel]||'Este mês';
+function calcPeriodo(inP){
+  const L=db.lanc||[],per=L.filter(l=>inP(l.data)),pagas=per.filter(l=>l.pago);
+  const recL=pagas.filter(l=>l.tipo==='receita'),despL=pagas.filter(l=>l.tipo==='despesa');
+  const comprasL=despL.filter(isCompraEstoque),opL=despL.filter(l=>!isCompraEstoque(l));
+  const rec=sum(recL),comprasEst=sum(comprasL),desOp=sum(opL),cmv=cmvPeriodo(inP),perdas=perdaPeriodo(inP);
+  const lBruto=rec-cmv,lLiq=lBruto-perdas-desOp,saidas=comprasEst+desOp;
+  return {L,per,pagas,recL,despL,comprasL,opL,rec,comprasEst,desOp,cmv,perdas,lBruto,lLiq,entradas:rec,saidas,caixa:rec-saidas};
+}
+function agrupaVendas(arr){const g={};arr.filter(l=>l.venda&&l.tipo==='receita').forEach(l=>{const k=l.saleId||l.id;const o=g[k]||(g[k]={key:k,data:l.data,cli:l.cli,forma:l.forma||'',pago:true,items:[],valor:0});o.items.push(l);o.valor+=Number(l.valor)||0;if(!l.pago)o.pago=false});return Object.values(g).sort((a,b)=>(b.data||'').localeCompare(a.data||''))}
+const nomeCli=id=>(db.clientes.find(c=>String(c.id)===String(id))||{}).nome||'Consumidor final';
+const explica=(t,txt)=>`<div class="notice" style="margin-bottom:14px"><strong>${t}</strong><p>${txt}</p></div>`;
+const kp=(label,val,sub='',cls='',fin='')=>`<div class="kpi card ${fin?'clickable':''}" ${fin?`data-fin="${fin}" role="button" tabindex="0"`:''}><small>${label}</small><strong class="${cls}">${val}</strong>${sub?`<small>${sub}</small>`:''}</div>`;
+const barra=(nome,v,max,cor)=>`<div class="pro-list-row" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><span>${nome}</span><b>${R(v)}</b></div><div class="pro-bar"><i style="width:${Math.max(3,v/Math.max(1,max)*100)}%;${cor?'background:'+cor:''}"></i></div></div>`;
+const statusLanc=l=>l.pago?'<span class="pro-chip ok">Pago</span>':((l.data||'')<hoje()?'<span class="pro-chip bad">Vencido</span>':((l.data||'')===hoje()?'<span class="pro-chip warn">Vence hoje</span>':'<span class="pro-chip warn">A vencer</span>'));
+
+function finTopo(){
+  const per=finVista!=='lancamentos'&&!['pagar','receber'].includes(finVista);
+  return `<div class="page-heading"><div><div class="eyebrow">FINANCEIRO</div><h1>Financeiro</h1><p>Entenda de onde vem o dinheiro, para onde ele vai e quanto realmente sobra.</p></div></div>
+  <div class="fin-pills">${VISTAS.map(([k,n])=>`<button type="button" class="fin-pill ${finVista===k?'on':''}" data-fin="${k}">${n}</button>`).join('')}</div>
+  ${per?`<div class="period-tabs" role="group" aria-label="Período" style="margin:12px 0">${[['hoje','Hoje'],['7dias','7 dias'],['30dias','30 dias'],['mes','Este mês'],['ano','Este ano']].map(([id,l])=>`<button type="button" class="period-tab ${periodoPainel===id?'on':''}" data-period="${id}" aria-pressed="${periodoPainel===id}">${l}</button>`).join('')}</div>`:''}`;
+}
+const VISTAS=[['resumo','Resumo'],['faturamento','Faturamento'],['lucro','Lucro'],['despesas','Despesas'],['caixa','Fluxo de caixa'],['pagar','A pagar'],['receber','A receber'],['estoque','Estoque'],['lancamentos','Lançamentos']];
+
+const vistasFin={
+resumo(){
+  const inP=pfInP(),c=calcPeriodo(inP),cap=pfCaption(),stock=stockList(),valCusto=stock.reduce((a,p)=>a+(Number(p.qtd)||0)*(Number(p.custo)||0),0);
+  const pend=(db.lanc||[]).filter(l=>!l.pago);const aPagar=sum(pend.filter(l=>l.tipo==='despesa')),aReceber=sum(pend.filter(l=>l.tipo==='receita')),venc=pend.filter(l=>l.tipo==='despesa'&&(l.data||'')<hoje());
+  const nV=agrupaVendas(c.pagas).length;
+  const ctx=[];
+  ctx.push(`<b>${cap}:</b> você recebeu <b>${R(c.rec)}</b>${nV?` em ${nV} venda(s)`:''}. Os produtos que saíram do estoque custaram <b>${R(c.cmv)}</b>, então o <b>lucro bruto</b> foi <b>${R(c.lBruto)}</b>${c.rec>0?` (para cada R$ 100 vendidos, ficaram R$ ${(c.lBruto/c.rec*100).toFixed(0)} depois do custo do produto)`:''}.`);
+  ctx.push(`Depois de pagar <b>${R(c.desOp)}</b> de despesas${c.perdas?` e ${R(c.perdas)} de perdas de estoque`:''}, o <b>lucro líquido</b> foi <b class="${c.lLiq<0?'bad':'ok'}">${R(c.lLiq)}</b>${c.rec>0?` (margem de ${pct(c.lLiq,c.rec)})`:''}.`);
+  if(c.comprasEst>0)ctx.push(`Você também gastou <b>${R(c.comprasEst)}</b> comprando mercadoria. Isso saiu do caixa, mas <b>não é despesa</b>: vira custo só quando o produto é vendido.`);
+  const alertas=[];if(venc.length)alertas.push(`<span class="bad">${venc.length} conta(s) a pagar vencida(s) somando ${R(sum(venc))}</span> <button type="button" class="text-action" data-fin="pagar">ver</button>`);if(c.lLiq<0&&c.rec>0)alertas.push('<span class="bad">O período está no prejuízo.</span> Veja onde está pesando em <button type="button" class="text-action" data-fin="lucro">Lucro</button>.');
+  const repor=stock.filter(p=>(Number(p.qtd)||0)<=(Number(p.min)||0)).length;if(repor)alertas.push(`${repor} produto(s) no estoque mínimo <button type="button" class="text-action" data-fin="estoque">ver</button>`);
+  return `${explica('Como ler esta tela','Aqui está o dinheiro do seu negócio em linguagem simples. Clique em qualquer quadro para ver o detalhe e entender de onde veio cada número.')}
+  <section class="card"><h2>Leitura do período</h2>${ctx.map(t=>`<p style="margin:8px 0;line-height:1.55">${t}</p>`).join('')}${alertas.length?`<div style="margin-top:12px">${alertas.map(a=>`<div class="pro-list-row" style="display:block">${a}</div>`).join('')}</div>`:''}</section>
+  <div class="cmp-grid fin-cards" style="margin-top:14px">
+   ${kp('Faturamento',R(c.rec),'Dinheiro das vendas e receitas já recebidas','ok','faturamento')}
+   ${kp('Lucro bruto',R(c.lBruto),'Faturamento menos o custo dos produtos vendidos',c.lBruto<0?'bad':'ok','lucro')}
+   ${kp('Despesas',R(c.desOp),'Aluguel, salários, impostos... sem compra de estoque','bad','despesas')}
+   ${kp('Lucro líquido',R(c.lLiq),'O que sobrou de verdade no período',c.lLiq<0?'bad':'ok','lucro')}
+   ${kp('Saldo de caixa do período',R(c.caixa),'Entradas pagas menos saídas pagas (inclui compras)',c.caixa<0?'bad':'','caixa')}
+   ${kp('A pagar',R(aPagar),'Tudo o que ainda deve (qualquer data)','bad','pagar')}
+   ${kp('A receber',R(aReceber),'Vendas e receitas ainda não recebidas','ok','receber')}
+   ${kp('Estoque ao custo',R(valCusto),'Dinheiro parado em mercadoria','','estoque')}
+  </div>`;
+},
+faturamento(){
+  const inP=pfInP(),c=calcPeriodo(inP),cap=pfCaption();
+  const vendasAll=agrupaVendas(c.per),vendasPagas=vendasAll.filter(v=>v.pago),pendRec=sum(c.per.filter(l=>l.tipo==='receita'&&!l.pago));
+  const ticket=vendasPagas.length?vendasPagas.reduce((a,v)=>a+v.valor,0)/vendasPagas.length:0;
+  const formas={};c.recL.forEach(l=>{const k=l.forma||'Não informada';formas[k]=(formas[k]||0)+(Number(l.valor)||0)});const fl=Object.entries(formas).sort((a,b)=>b[1]-a[1]),fmax=Math.max(1,...fl.map(f=>f[1]));
+  const prods={};c.recL.filter(l=>l.venda).forEach(l=>{const k=l.itemProductId||l.itemNome||l.desc;const o=prods[k]||(prods[k]={nome:l.itemNome||l.desc||'Item',servico:!!l.servico,qtd:0,rec:0});o.qtd+=Number(l.itemQtd)||0;o.rec+=Number(l.valor)||0});const pl=Object.values(prods).sort((a,b)=>b.rec-a.rec);
+  const outras=c.recL.filter(l=>!l.venda);
+  return `${explica('O que é faturamento?','É todo o dinheiro que entrou no período por vendas e outras receitas já recebidas. Ele ainda não é lucro: dele saem o custo dos produtos e as despesas. Vendas ainda não recebidas ficam em "A receber".')}
+  <div class="cmp-grid fin-cards">${kp('Faturamento recebido',R(c.rec),cap,'ok')}${kp('Ainda a receber',R(pendRec),'Vendas/receitas pendentes do período','warn','receber')}${kp('Vendas realizadas',String(vendasPagas.length),'Quantidade de vendas pagas')}${kp('Ticket médio',R(ticket),'Valor médio por venda')}</div>
+  <div class="dash-columns top-panels"><section class="card"><h2>Como o cliente pagou</h2>${fl.length?fl.map(([n,v])=>barra(esc(n)+' <small class="muted-inline">'+pct(v,c.rec)+'</small>',v,fmax)).join(''):'<div class="empty">Sem recebimentos no período.</div>'}</section>
+  <section class="card"><h2>O que mais faturou</h2>${pl.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Item</th><th>Qtd</th><th>Faturou</th><th>% do total</th></tr></thead><tbody>${pl.slice(0,10).map(o=>`<tr><td>${esc(o.nome)}${o.servico?' <small class="muted-inline">serviço</small>':''}</td><td>${o.qtd}</td><td>${R(o.rec)}</td><td>${pct(o.rec,c.rec)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem vendas no período.</div>'}</section></div>
+  <section class="card"><div class="panel-heading"><h2>Vendas do período</h2><button type="button" class="text-action" data-tab="vendas">Ir para Vendas</button></div>${vendasAll.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Pagamento</th><th>Valor</th><th>Status</th></tr></thead><tbody>${vendasAll.slice(0,50).map(v=>`<tr><td>${fd(v.data||hoje())}</td><td>${esc(nomeCli(v.cli))}</td><td>${esc(v.items.map(i=>(i.itemNome||i.desc)+' ×'+(i.itemQtd||1)).join(', '))}</td><td>${esc(v.forma||'—')}</td><td>${R(v.valor)}</td><td>${v.pago?'<span class="pro-chip ok">Recebido</span>':'<span class="pro-chip warn">A receber</span>'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhuma venda no período.</div>'}</section>
+  ${outras.length?`<section class="card"><h2>Outras receitas</h2>${outras.map(l=>`<div class="pro-list-row"><div>${esc(l.desc)}<small>${fd(l.data)} · ${esc(l.forma||'forma não informada')}</small></div><b class="ok">+ ${R(l.valor)}</b></div>`).join('')}</section>`:''}`;
+},
+lucro(){
+  const inP=pfInP(),c=calcPeriodo(inP),cap=pfCaption();
+  const prods={};let cmvItens=0;c.recL.filter(l=>l.venda&&!l.servico).forEach(l=>{const k=l.itemProductId||l.itemNome||l.desc;const q=Number(l.itemQtd)||0,cu=custoUnitItem(l);const o=prods[k]||(prods[k]={nome:l.itemNome||l.desc||'Produto',qtd:0,rec:0,custo:0});o.qtd+=q;o.rec+=Number(l.valor)||0;o.custo+=cu*q;cmvItens+=cu*q});
+  const pl=Object.values(prods).map(o=>Object.assign(o,{lucro:o.rec-o.custo})).sort((a,b)=>b.lucro-a.lucro);const devol=Math.max(0,r2(cmvItens-c.cmv));
+  const cats={};c.opL.forEach(l=>{const k=l.categoria||'Sem categoria';cats[k]=(cats[k]||0)+(Number(l.valor)||0)});const cl=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  const cont=(db.contagens||[]).filter(x=>inP(x.data||''));
+  const meses=[];for(let i=11;i>=0;i--){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))}
+  const evo=meses.map(m=>{const x=calcPeriodo(d=>String(d||'').startsWith(m));return {m,rec:x.rec,custos:x.cmv+x.perdas+x.desOp,lucro:x.lLiq}}).filter(o=>o.rec||o.custos);
+  const L=(txt,val,cls='',sub='',fin='')=>`<tr class="${cls} ${fin?'clickable':''}" ${fin?`data-fin="${fin}"`:''}><td>${txt}${sub?`<small class="muted-inline" style="display:block">${sub}</small>`:''}</td><td style="text-align:right">${val}</td><td style="text-align:right">${pct(Math.abs(typeof val==='string'?0:val),c.rec)}</td></tr>`;
+  const row=(txt,v,pc,cls='',sub='',fin='')=>`<tr class="${cls} ${fin?'clickable':''}" ${fin?`data-fin="${fin}"`:''}><td>${txt}${sub?`<small class="muted-inline" style="display:block">${sub}</small>`:''}</td><td style="text-align:right"><b>${R(v)}</b></td><td style="text-align:right">${c.rec>0?pct(v,c.rec):'—'}</td></tr>`;
+  return `${explica('Lucro bruto e lucro líquido','Lucro bruto = o que você vendeu menos o custo dos produtos que saíram do estoque. Lucro líquido = lucro bruto menos as despesas do negócio (aluguel, salários, impostos...) e as perdas de estoque. A compra de mercadoria NÃO é despesa: o dinheiro sai do caixa quando você compra, mas só vira custo no lucro quando o produto é vendido. Assim o lucro não parece prejuízo quando você abastece o estoque.')}
+  <section class="card"><div class="panel-heading"><h2>Demonstrativo do resultado</h2><span class="chart-badge">${cap}</span></div><div class="table-wrap"><table class="pro-table"><thead><tr><th>Linha</th><th style="text-align:right">Valor</th><th style="text-align:right">% do faturamento</th></tr></thead><tbody>
+   ${row('Faturamento (vendas e receitas recebidas)',c.rec,0,'','','faturamento')}
+   ${row('(−) Custo dos produtos vendidos',c.cmv,0,'','Quanto custou o que você vendeu (custo gravado na venda)')}
+   ${row('= Lucro bruto',c.lBruto,0,'sub')}
+   ${row('(−) Despesas',c.desOp,0,'','Aluguel, salários, impostos, marketing etc.','despesas')}
+   ${row('(−) Perdas de estoque',c.perdas,0,'','Faltas encontradas nas contagens do inventário (descontadas as sobras)')}
+   ${row('= Lucro líquido',c.lLiq,0,'tot')}
+  </tbody></table></div><p class="dre-note">Fora desta conta: compras de estoque pagas no período, <b>${R(c.comprasEst)}</b>. Elas saem do caixa (veja <button type="button" class="text-action" data-fin="caixa">Fluxo de caixa</button>) mas só entram no lucro quando o produto é vendido.</p></section>
+  <section class="card"><h2>Custo dos produtos vendidos, por produto</h2>${pl.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Produto</th><th>Qtd</th><th>Faturou</th><th>Custo</th><th>Lucro</th><th>Margem</th></tr></thead><tbody>${pl.map(o=>`<tr><td>${esc(o.nome)}</td><td>${o.qtd}</td><td>${R(o.rec)}</td><td>${R(o.custo)}</td><td class="${o.lucro<0?'bad':'ok'}">${R(o.lucro)}</td><td>${pct(o.lucro,o.rec)}</td></tr>`).join('')}</tbody></table></div>${devol?`<p class="dre-note">Devoluções no período devolveram ${R(devol)} de custo ao estoque.</p>`:''}`:'<div class="empty">Nenhum produto vendido no período.</div>'}<p class="dre-note">Se o custo de um produto estiver zerado no cadastro, o lucro aparece maior que o real. Mantenha o custo preenchido (as compras atualizam sozinhas).</p></section>
+  <div class="dash-columns top-panels"><section class="card"><h2>Despesas por categoria</h2>${cl.length?cl.map(([n,v])=>barra(esc(n)+' <small class="muted-inline">'+pct(v,c.desOp)+'</small>',v,cl[0][1],'#ff7a8d')).join(''):'<div class="empty">Sem despesas pagas no período.</div>'}<button type="button" class="text-action" data-fin="despesas">Ver todas as despesas ›</button></section>
+  <section class="card"><h2>Perdas e sobras de estoque</h2>${cont.length?cont.map(x=>`<div class="pro-list-row"><div>${fd(x.data)} · ${esc(x.motivo||'Contagem física')}<small>${(x.itens||[]).filter(i=>i.dif!==0).length} divergência(s)</small></div><div style="text-align:right"><span class="bad">Faltas ${R(x.totalFalta)}</span><small>Sobras ${R(x.totalSobra)}</small></div></div>`).join(''):'<div class="empty">Nenhuma contagem com divergência no período.</div>'}<button type="button" class="text-action" data-tab="inventario">Fazer contagem de estoque ›</button></section></div>
+  <section class="card"><h2>Evolução mês a mês</h2>${evo.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Mês</th><th>Receitas</th><th>Custos e despesas</th><th>Lucro líquido</th></tr></thead><tbody>${evo.map(o=>`<tr><td>${o.m.slice(5)}/${o.m.slice(0,4)}</td><td>${R(o.rec)}</td><td>${R(o.custos)}</td><td class="${o.lucro<0?'bad':'ok'}">${R(o.lucro)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem histórico ainda.</div>'}</section>`;
+},
+despesas(){
+  const inP=pfInP(),c=calcPeriodo(inP),cap=pfCaption();
+  const pendOp=c.per.filter(l=>l.tipo==='despesa'&&!l.pago&&!isCompraEstoque(l));
+  const cats={};c.opL.forEach(l=>{const k=l.categoria||'Sem categoria';cats[k]=(cats[k]||0)+(Number(l.valor)||0)});const cl=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  const lista=c.per.filter(l=>l.tipo==='despesa'&&!isCompraEstoque(l)).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  const compras=c.per.filter(l=>l.tipo==='despesa'&&isCompraEstoque(l)).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  return `${explica('O que entra em despesas?','São os gastos para manter o negócio funcionando: aluguel, energia, salários, impostos, marketing, transporte. A compra de mercadoria para revender fica separada, abaixo, porque não reduz o lucro até o produto ser vendido. Use sempre a categoria ao lançar uma despesa para ver aqui para onde o dinheiro vai.')}
+  <div class="cmp-grid fin-cards">${kp('Despesas pagas',R(c.desOp),cap,'bad')}${kp('Despesas pendentes',R(sum(pendOp)),'Ainda a pagar neste período','warn','pagar')}${kp('Compras de estoque pagas',R(c.comprasEst),'Fora do lucro, mas saem do caixa','','caixa')}${kp('Despesas / faturamento',c.rec>0?pct(c.desOp,c.rec):'—','Quanto do faturamento vira despesa')}</div>
+  <div class="dash-columns top-panels"><section class="card"><h2>Por categoria</h2>${cl.length?cl.map(([n,v])=>barra(esc(n)+' <small class="muted-inline">'+pct(v,c.desOp)+'</small>',v,cl[0][1],'#ff7a8d')).join(''):'<div class="empty">Sem despesas pagas no período.</div>'}</section>
+  <section class="card"><div class="panel-heading"><h2>Compras de estoque</h2><button type="button" class="text-action" data-tab="compras">Ir para Compras</button></div><p class="muted-inline">Não entram no lucro. Viram custo quando o produto é vendido.</p>${compras.length?compras.slice(0,8).map(l=>`<div class="pro-list-row"><div>${esc(l.desc)}<small>${fd(l.data)} · ${l.pago?'pago':'pendente'}</small></div><b>${R(l.valor)}</b></div>`).join(''):'<div class="empty">Sem compras no período.</div>'}</section></div>
+  <section class="card"><div class="panel-heading"><h2>Despesas do período</h2><button type="button" class="text-action" data-tab="despesas">Lançar despesa</button></div>${lista.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Forma</th><th>Valor</th><th>Status</th></tr></thead><tbody>${lista.slice(0,60).map(l=>`<tr><td>${fd(l.data)}</td><td>${esc(l.desc)}</td><td>${esc(l.categoria||'—')}</td><td>${esc(l.forma||'—')}</td><td>${R(l.valor)}</td><td>${statusLanc(l)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhuma despesa no período.</div>'}</section>`;
+},
+caixa(){
+  const inP=pfInP(),c=calcPeriodo(inP),cap=pfCaption(),L=db.lanc||[];
+  const acumulado=sum(L.filter(l=>l.pago&&l.tipo==='receita'))-sum(L.filter(l=>l.pago&&l.tipo==='despesa'));
+  const formas={};c.pagas.forEach(l=>{const k=l.forma||'Não informada';const o=formas[k]||(formas[k]={e:0,s:0});if(l.tipo==='receita')o.e+=Number(l.valor)||0;else o.s+=Number(l.valor)||0});
+  const fl=Object.entries(formas).sort((a,b)=>(b[1].e+b[1].s)-(a[1].e+a[1].s));
+  const dias={};c.pagas.forEach(l=>{const o=dias[l.data]||(dias[l.data]={e:0,s:0});if(l.tipo==='receita')o.e+=Number(l.valor)||0;else o.s+=Number(l.valor)||0});const dl=Object.entries(dias).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,31);
+  return `${explica('Caixa não é lucro','Fluxo de caixa mostra o dinheiro que realmente entrou e saiu. Compras de mercadoria saem do caixa na hora, mas só reduzem o lucro quando o produto é vendido. Por isso o caixa pode estar apertado mesmo com lucro (você investiu em estoque), e é normal.')}
+  <div class="cmp-grid fin-cards">${kp('Entradas',R(c.entradas),cap+' · recebimentos','ok','faturamento')}${kp('Saídas',R(c.saidas),'Despesas + compras de estoque','bad','despesas')}${kp('Saldo do período',R(c.caixa),'Entradas menos saídas',c.caixa<0?'bad':'ok')}${kp('Saldo acumulado',R(acumulado),'Tudo o que já entrou menos saiu',acumulado<0?'bad':'')}</div>
+  <section class="card"><h2>Do lucro até o caixa</h2><div class="table-wrap"><table class="pro-table"><tbody>
+   <tr><td>Lucro líquido do período</td><td style="text-align:right"><b>${R(c.lLiq)}</b></td></tr>
+   <tr><td>(+) Custo dos produtos vendidos<small class="muted-inline" style="display:block">Já foi pago quando você comprou o estoque, não sai do caixa agora</small></td><td style="text-align:right">${R(c.cmv)}</td></tr>
+   <tr><td>(+) Perdas de estoque<small class="muted-inline" style="display:block">São baixa de mercadoria, não saída de dinheiro</small></td><td style="text-align:right">${R(c.perdas)}</td></tr>
+   <tr><td>(−) Compras de estoque pagas<small class="muted-inline" style="display:block">Dinheiro que saiu para abastecer o estoque</small></td><td style="text-align:right">${R(c.comprasEst)}</td></tr>
+   <tr class="tot"><td><b>= Saldo de caixa do período</b></td><td style="text-align:right"><b>${R(c.caixa)}</b></td></tr></tbody></table></div></section>
+  <div class="dash-columns top-panels"><section class="card"><h2>Por forma de pagamento</h2>${fl.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Forma</th><th>Entrou</th><th>Saiu</th><th>Saldo</th></tr></thead><tbody>${fl.map(([n,o])=>`<tr><td>${esc(n)}</td><td class="ok">${R(o.e)}</td><td class="bad">${R(o.s)}</td><td>${R(o.e-o.s)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem movimento no período.</div>'}</section>
+  <section class="card"><h2>Dia a dia</h2>${dl.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Dia</th><th>Entrou</th><th>Saiu</th><th>Saldo do dia</th></tr></thead><tbody>${dl.map(([d,o])=>`<tr><td>${fd(d)}</td><td class="ok">${R(o.e)}</td><td class="bad">${R(o.s)}</td><td>${R(o.e-o.s)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem movimento no período.</div>'}</section></div>`;
+},
+pagar(){return pendentes('despesa')},
+receber(){return pendentes('receita')},
+estoque(){
+  const stock=stockList(),h=hoje();const d60=new Date();d60.setDate(d60.getDate()-60);const lim=d60.toISOString().slice(0,10);
+  const ult={};(db.lanc||[]).filter(l=>l.venda&&l.tipo==='receita'&&!l.servico).forEach(l=>{const k=String(l.itemProductId||l.itemNome);if(!ult[k]||(l.data||'')>ult[k])ult[k]=l.data||''});
+  const valCusto=stock.reduce((a,p)=>a+(Number(p.qtd)||0)*(Number(p.custo)||0),0),valVenda=stock.reduce((a,p)=>a+(Number(p.qtd)||0)*(Number(p.preco)||0),0);
+  const lst=stock.map(p=>{const q=Number(p.qtd)||0,cu=Number(p.custo)||0,pr=Number(p.preco)||0,u=ult[String(p.id)]||ult[String(p.nome)]||'';return {p,q,cu,pr,vc:q*cu,vv:q*pr,parado:q>0&&(!u||u<lim),u}}).sort((a,b)=>b.vc-a.vc);
+  const parados=lst.filter(x=>x.parado),vParado=parados.reduce((a,x)=>a+x.vc,0);
+  return `${explica('Estoque é dinheiro parado','Cada produto guardado é dinheiro que já saiu do seu caixa e ainda não voltou. Aqui você vê quanto está parado, quanto vai render quando vender (ao preço de venda) e quais produtos não vendem há mais de 60 dias.')}
+  <div class="cmp-grid fin-cards">${kp('Estoque ao custo',R(valCusto),'O que você pagou pela mercadoria')}${kp('Ao preço de venda',R(valVenda),'Quanto entra se vender tudo')}${kp('Lucro potencial',R(valVenda-valCusto),'Venda menos custo, antes das despesas','ok')}${kp('Parado há 60+ dias',R(vParado),parados.length+' produto(s) sem venda','warn')}</div>
+  <section class="card"><div class="panel-heading"><h2>Produtos por valor em estoque</h2><div class="heading-actions"><button type="button" class="text-action" data-tab="compras">Fazer compra</button><button type="button" class="text-action" data-tab="inventario">Contar estoque</button></div></div>${lst.length?`<div class="table-wrap"><table class="pro-table"><thead><tr><th>Produto</th><th>Qtd</th><th>Custo unit.</th><th>Valor ao custo</th><th>Preço venda</th><th>Margem</th><th>% do estoque</th><th>Situação</th></tr></thead><tbody>${lst.map(x=>`<tr><td>${esc(x.p.nome)}</td><td>${x.q}</td><td>${R(x.cu)}</td><td>${R(x.vc)}</td><td>${R(x.pr)}</td><td class="${x.pr>0&&x.cu>=x.pr?'bad':''}">${x.pr>0?pct(x.pr-x.cu,x.pr):'—'}</td><td>${pct(x.vc,valCusto)}</td><td>${x.q<=0?'<span class="pro-chip bad">Zerado</span>':(x.q<=(Number(x.p.min)||0)?'<span class="pro-chip warn">Repor</span>':(x.parado?'<span class="pro-chip warn">Parado</span>':'<span class="pro-chip ok">Normal</span>'))}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum produto cadastrado.</div>'}</section>`;
+},
+lancamentos(){return baseFin()}
+};
+function pendentes(tipo){
+  const pag=tipo==='despesa',h=hoje();const lst=(db.lanc||[]).filter(l=>!l.pago&&l.tipo===tipo&&l.data).sort((a,b)=>a.data.localeCompare(b.data));
+  const add=n=>{const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};const d7=add(7),d30=add(30);
+  const faixa={venc:lst.filter(l=>l.data<h),hoje:lst.filter(l=>l.data===h),s7:lst.filter(l=>l.data>h&&l.data<=d7),s30:lst.filter(l=>l.data>d7&&l.data<=d30),dep:lst.filter(l=>l.data>d30)};
+  const rotulo=pag?['Vencidas','Vencem hoje','Próximos 7 dias','8 a 30 dias','Depois de 30 dias']:['Atrasadas','Vencem hoje','Próximos 7 dias','8 a 30 dias','Depois de 30 dias'];
+  return `${explica(pag?'Contas a pagar':'Contas a receber',pag?'Tudo o que você ainda precisa pagar, de qualquer data: despesas, compras a prazo e parcelas. Pagar em dia evita juros e mantém a boa relação com o fornecedor. Clique em "Dar baixa" quando pagar.':'Tudo o que clientes ainda vão te pagar, de qualquer data. Cobre o que estiver atrasado e dê baixa quando receber.')}
+  <div class="cmp-grid fin-cards">${['venc','hoje','s7','s30','dep'].map((k,i)=>kp(rotulo[i],R(sum(faixa[k])),faixa[k].length+' lançamento(s)',i===0&&faixa[k].length?'bad':'')).join('')}</div>
+  <section class="card"><h2>${pag?'A pagar':'A receber'}: ${lst.length} lançamento(s), total ${R(sum(lst))}</h2>${lst.length?lst.map(l=>`<div class="row"><div class="i"><b>${esc(l.desc)}</b><small>${l.data<h?'Venceu em ':'Vence em '}${fd(l.data)}${l.cli?' · '+esc(nomeCli(l.cli)):''}${l.categoria?' · '+esc(l.categoria):''}${l.compraId?' · compra de estoque':''}</small></div><div class="act"><strong class="${pag?'bad':'ok'}">${R(l.valor)}</strong>${statusLanc(l)}<button class="btn s" data-act="tg" data-id="${l.id}">${pag?'Dar baixa (paguei)':'Dar baixa (recebi)'}</button></div></div>`).join(''):`<div class="empty">Nada ${pag?'a pagar':'a receber'}. Tudo em dia!</div>`}</section>`;
+}
+const baseFin=views.fin;
+views.fin=function(){return `<div class="dashboard module-page">${finTopo()}${finVista==='lancamentos'?'<div style="margin-top:14px">'+baseFin()+'</div>':'<div style="margin-top:14px">'+vistasFin[finVista]()+'</div>'}</div>`};
+
+/* navegacao: clique em qualquer elemento com data-fin */
+function irFin(v){if(!vistasFin[v])v='resumo';finVista=v;tab='fin';orcv=null;render()}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-fin]');if(!t)return;e.stopPropagation();e.preventDefault();irFin(t.dataset.fin)},true);
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const t=e.target.closest&&e.target.closest('.clickable[data-fin]');if(!t||t.tagName==='BUTTON')return;e.preventDefault();irFin(t.dataset.fin)},true);
+const st2=document.createElement('style');st2.textContent=`
+.clickable{cursor:pointer;transition:transform .15s,box-shadow .15s}.clickable:hover,.clickable:focus-visible{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(80,220,170,.55),0 8px 24px rgba(0,0,0,.25);outline:none}
+.metric-card.clickable .metric-info::after{content:" ver detalhes ›";font-size:10px;opacity:.7}
+tr.clickable:hover{background:rgba(80,220,170,.08);transform:none;box-shadow:none}
+.fin-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.fin-pill{border:1px solid var(--ln,rgba(255,255,255,.15));background:transparent;color:inherit;padding:8px 14px;border-radius:99px;cursor:pointer;font:inherit;font-size:13px}.fin-pill.on{background:rgba(60,207,145,.18);border-color:#3ccf91;color:#4fd68a;font-weight:700}
+.fin-cards .kpi{min-height:92px}.fin-cards .kpi small{display:block;color:var(--mut)}.fin-cards .kpi strong{display:block;font-size:22px;margin:4px 0}
+tr.tot td,tr.sub td{font-weight:800;border-top:1px solid var(--ln,rgba(255,255,255,.2))}
+`;document.head.appendChild(st2);
+
+})();
+
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4" crossorigin="anonymous"></script>
