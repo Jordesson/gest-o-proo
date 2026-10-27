@@ -669,30 +669,38 @@ estoque(){
   const produtos=db.prod.filter(p=>(p.tipo||'produto')==='produto');
   const servicos=db.prod.filter(p=>p.tipo==='servico');
   const tot=produtos.reduce((a,p)=>a+(+p.qtd||0)*(+p.custo||0),0);
-  return `<div class="card"><h2>Calculadora de preço de venda</h2>
+  return `<div class="card fp-card"><div class="fp-head"><div><h2>Cadastro de produto / serviço</h2><p class="muted-inline">Cadastre um item novo ou calcule o preço de venda. Clique para abrir ou fechar.</p></div><button type="button" class="btn ${window.__fpOpen?'s':''}" data-act="fptoggle">${window.__fpOpen?'− Fechar cadastro':'＋ Novo produto / serviço'}</button></div>
+  <div class="fp-body" ${window.__fpOpen?'':'hidden'}>
   <div class="notice"><strong>Informe o custo e sua porcentagem desejada</strong><p>O sistema calcula o preço de venda considerando a margem desejada, impostos, taxas e outras despesas percentuais. A margem é calculada sobre o preço final de venda.</p></div>
-  <form id="fp">
-    <select name="tipo" id="tipoitem"><option value="produto">Produto</option><option value="servico">Serviço</option></select>
-    <input name="nome" placeholder="Nome do produto ou serviço" required>
-    <input name="custo" id="custop" type="number" min="0" step="0.01" placeholder="Custo unitário (R$)" required>
-    <input name="margem" id="margemp" type="number" min="0" max="99" step="any" value="30" placeholder="Margem desejada (%)" required>
-    <input name="imposto" id="impostop" type="number" min="0" max="99" step="0.1" value="0" placeholder="Impostos (%)">
-    <input name="taxas" id="taxasp" type="number" min="0" max="99" step="0.1" value="0" placeholder="Taxas de venda/cartão (%)">
-    <input name="extras" id="extrasp" type="number" min="0" max="99" step="0.1" value="0" placeholder="Outras despesas (%)">
-    <input name="preco" id="precop" type="number" step="0.01" min="0" placeholder="Preço de venda (R$): digite e a margem se ajusta" required>
-    <input name="qtd" id="qtdp" type="number" min="0" step="1" value="0" placeholder="Quantidade em estoque">
-    <input name="min" id="minp" type="number" min="0" step="1" value="0" placeholder="Estoque mínimo">
-    <input name="codigo" placeholder="SKU / código interno (opcional)">
-    <input name="codigoBarras" placeholder="Código de barras / GTIN (opcional)">
-    <input name="categoria" placeholder="Categoria (ex.: bebidas, limpeza)">
-    <input name="unidade" placeholder="Unidade (un, kg, L, caixa)" value="un">
-    <input name="localizacao" placeholder="Localização no estoque (opcional)">
-    <input name="fornecedorNome" placeholder="Fornecedor padrão (opcional)">
-    <input name="ncm" placeholder="NCM (opcional)">
-    <input name="cest" placeholder="CEST (opcional)">
-    <div class="full" id="resultado-preco" style="background:#eef6f1;border-radius:10px;padding:12px;font-weight:700">Preço de venda: R$ 0,00</div>
-    <button class="btn">Salvar produto/serviço</button>
-  </form></div>
+  <form id="fp" class="fp-form">
+    <div class="fp-sec"><h3>1 · Identificação</h3><div class="fp-grid">
+      <label>Tipo<select name="tipo" id="tipoitem"><option value="produto">Produto</option><option value="servico">Serviço</option></select></label>
+      <label class="fp-wide">Nome do produto ou serviço *<input name="nome" placeholder="Ex.: Adesivo A4 brilho" required></label>
+      <label>Categoria<input name="categoria" placeholder="Ex.: bebidas, limpeza"></label>
+      <label>Unidade<input name="unidade" placeholder="un, kg, L, caixa" value="un"></label>
+    </div></div>
+    <div class="fp-sec"><h3>2 · Preço</h3><div class="fp-grid">
+      <label>Custo unitário (R$) *<input name="custo" id="custop" type="number" min="0" step="0.01" placeholder="0,00" required></label>
+      <label>Margem desejada (%) *<input name="margem" id="margemp" type="number" min="0" max="99" step="any" value="30" required></label>
+      <label>Impostos (%)<input name="imposto" id="impostop" type="number" min="0" max="99" step="0.1" value="0"></label>
+      <label>Taxas de venda/cartão (%)<input name="taxas" id="taxasp" type="number" min="0" max="99" step="0.1" value="0"></label>
+      <label>Outras despesas (%)<input name="extras" id="extrasp" type="number" min="0" max="99" step="0.1" value="0"></label>
+      <label>Preço de venda (R$) *<input name="preco" id="precop" type="number" step="0.01" min="0" placeholder="Digite e a margem se ajusta" required></label>
+    </div><div class="full" id="resultado-preco" style="background:#eef6f1;border-radius:10px;padding:12px;font-weight:700">Preço de venda: R$ 0,00</div></div>
+    <div class="fp-sec"><h3>3 · Estoque</h3><div class="fp-grid">
+      <label>Quantidade em estoque<input name="qtd" id="qtdp" type="number" min="0" step="1" value="0"></label>
+      <label>Estoque mínimo<input name="min" id="minp" type="number" min="0" step="1" value="0"></label>
+      <label>Localização no estoque<input name="localizacao" placeholder="Opcional"></label>
+      <label>Fornecedor padrão<input name="fornecedorNome" placeholder="Opcional"></label>
+    </div></div>
+    <details class="fp-more"><summary>Mais dados (códigos e fiscal) · opcional</summary><div class="fp-grid">
+      <label>SKU / código interno<input name="codigo" placeholder="Opcional"></label>
+      <label>Código de barras / GTIN<input name="codigoBarras" placeholder="Opcional"></label>
+      <label>NCM<input name="ncm" placeholder="Opcional"></label>
+      <label>CEST<input name="cest" placeholder="Opcional"></label>
+    </div></details>
+    <div class="fp-actions"><button class="btn">Salvar produto/serviço</button><button type="button" class="btn s" data-act="fptoggle">Cancelar</button></div>
+  </form></div></div>
   <div class="card"><div class="panel-heading"><div><h2>Produtos <small style="color:var(--mut);font-weight:400">· custo total em estoque ${brl(tot)}</small></h2><div class="muted-inline">Cadastre individualmente ou importe vários produtos de uma planilha CSV.</div></div><div class="heading-actions"><label class="btn s" for="import-produtos-csv" style="cursor:pointer">Importar CSV<input id="import-produtos-csv" type="file" accept=".csv,text/csv" hidden></label><button class="btn s" data-act="productcsvtemplate">Baixar modelo</button><input id="busca-produtos" class="section-search" placeholder="Buscar produto..." aria-label="Buscar produto"></div></div>
   ${produtos.length?produtos.map(p=>`<div class="row" data-search-group="produtos" data-q="${esc((p.nome+' produto '+p.qtd+' '+p.preco).toLowerCase())}"><div class="i"><b>${esc(p.nome)}</b><small>Custo ${brl(p.custo||0)} · venda ${brl(p.preco)} · margem ${p.margem??'—'}% · mínimo ${p.min||0}</small></div><div class="act">${p.qtd<=p.min?'<span class="tag x">Estoque baixo</span>':''}<button class="btn s" data-act="mn" data-id="${p.id}">−</button><strong>${p.qtd||0}</strong><button class="btn s" data-act="pl" data-id="${p.id}">+</button><button class="btn s" data-act="edp" data-id="${p.id}">Editar</button><button class="btn s d" data-act="delp" data-id="${p.id}">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhum produto cadastrado.</div>'}</div>
   <div class="card"><h2>Serviços</h2>${servicos.length?servicos.map(p=>`<div class="row" data-search-group="produtos" data-q="${esc((p.nome+' serviço '+p.preco).toLowerCase())}"><div class="i"><b>${esc(p.nome)}</b><small>Custo ${brl(p.custo||0)} · preço de venda ${brl(p.preco)} · margem ${p.margem??'—'}%</small></div><div class="act"><button class="btn s" data-act="edp" data-id="${p.id}">Editar</button><button class="btn s d" data-act="delp" data-id="${p.id}">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhum serviço cadastrado.</div>'}</div>`},
@@ -856,7 +864,7 @@ function printSale(key){const items=db.lanc.filter(l=>l.venda&&(l.saleId||l.id)=
 function atualizarTotalVenda(form){if(!form)return;const q=Number(form.elements.qtd?.value||0),v=Number(form.elements.preco?.value||0),out=document.querySelector('#total-venda');if(out)out.textContent='Total da venda: '+brl(q*v)}
 function margemDoPreco(){const f=$('#fp');if(!f)return;const custo=+(f.elements.custo?.value||0),pr=+(f.elements.preco?.value||0),imp=+(f.elements.imposto?.value||0),tax=+(f.elements.taxas?.value||0),ext=+(f.elements.extras?.value||0);if(!(pr>0))return;const m=Math.round(((1-custo/pr)*100-imp-tax-ext)*100)/100;f.elements.margem.value=String(m);const out=$('#resultado-preco');if(out)out.textContent=m<0?'Atenção: este preço fica abaixo do custo somado a impostos e taxas (margem '+m+'%).':'Preço de venda: '+brl(pr)+' · margem calculada '+m+'% · impostos '+imp+'% · taxas '+tax+'% · outras despesas '+ext+'%'}
 function calcularPreco(){const f=$('#fp');if(!f)return;const custo=+(f.elements.custo?.value||0),m=+(f.elements.margem?.value||0),imp=+(f.elements.imposto?.value||0),tax=+(f.elements.taxas?.value||0),ext=+(f.elements.extras?.value||0),s=m+imp+tax+ext,out=$('#resultado-preco'),price=$('#precop');if(s>=100){if(out)out.textContent='A soma das porcentagens precisa ser menor que 100%.';if(price)price.value='';return}const v=custo/(1-s/100);if(price)price.value=Number.isFinite(v)?v.toFixed(2):'0.00';if(out)out.textContent='Preço de venda calculado: '+brl(v)+' · margem '+m+'% · impostos '+imp+'% · taxas '+tax+'% · outras despesas '+ext+'%'}
-function ed(fid,arr,id){render();const o=db[arr].find(x=>x.id==id),f=document.getElementById(fid);
+function ed(fid,arr,id){if(fid==='fp')window.__fpOpen=true;render();const o=db[arr].find(x=>x.id==id),f=document.getElementById(fid);
   for(const k in o){const el=f.elements[k];if(el)el.value=typeof o[k]=='boolean'?(o[k]?'1':''):o[k]}
   if(fid==='fp'){if(f.elements.tipo)f.elements.tipo.value=o.tipo||'produto';if(f.elements.custo)f.elements.custo.value=o.custo??o.preco??0;if(f.elements.margem)f.elements.margem.value=o.margem??30;if(f.elements.imposto)f.elements.imposto.value=o.imposto??0;if(f.elements.taxas)f.elements.taxas.value=o.taxas??0;if(f.elements.extras)f.elements.extras.value=o.extras??0;calcularPreco()}
   f.dataset.eid=id;f.querySelector('.btn').textContent='Salvar alterações';f.scrollIntoView({block:'center'})}
@@ -936,7 +944,7 @@ document.addEventListener('submit',e=>{
   if(i=='fempresa'){db.empresa=Object.assign({},db.empresa,{nome:f.nome.trim(),razao:f.razao.trim(),cnpj:f.cnpj.trim(),tel:f.tel.trim(),email:f.email.trim(),endereco:f.endereco.trim(),cidade:f.cidade.trim()});db.emp=db.empresa.nome;save();render();alert('Dados da empresa salvos.');return}
   if(i=='fc')put('clientes',{nome:f.nome.trim(),tel:f.tel,email:f.email,cpf:f.cpf||'',endereco:f.endereco||'',nascimento:f.nascimento||'',obs:f.obs||''});
   if(i=='ff'){const caja=activeCash();put('lanc',{tipo:f.tipo,desc:f.desc.trim(),valor:+f.valor,data:f.data,pago:!!f.pago,cli:f.cli,categoria:f.categoria||'',forma:f.forma||'',caixaId:!!f.pago&&f.forma==='Dinheiro'&&caja?caja.id:''});mes=f.data.slice(0,7)}
-  if(i=='fp'){const cost=+f.custo||0,margin=+f.margem||0,tax=+f.imposto||0,fees=+f.taxas||0,extra=+f.extras||0,rate=margin+tax+fees+extra;if(rate>=100)return alert('A soma da margem, impostos, taxas e despesas deve ser menor que 100%.');const price=(+f.preco>0)?+f.preco:cost/(1-rate/100);put('prod',{tipo:f.tipo||'produto',nome:f.nome.trim(),custo:cost,margem:margin,imposto:tax,taxas:fees,extras:extra,qtd:f.tipo==='servico'?0:(+f.qtd||0),min:f.tipo==='servico'?0:(+f.min||0),preco:price,codigo:f.codigo||'',codigoBarras:f.codigoBarras||'',categoria:f.categoria||'',unidade:f.unidade||'un',localizacao:f.localizacao||'',fornecedorNome:f.fornecedorNome||'',ncm:f.ncm||'',cest:f.cest||''});}
+  if(i=='fp'){const cost=+f.custo||0,margin=+f.margem||0,tax=+f.imposto||0,fees=+f.taxas||0,extra=+f.extras||0,rate=margin+tax+fees+extra;if(rate>=100)return alert('A soma da margem, impostos, taxas e despesas deve ser menor que 100%.');const price=(+f.preco>0)?+f.preco:cost/(1-rate/100);window.__fpOpen=false;put('prod',{tipo:f.tipo||'produto',nome:f.nome.trim(),custo:cost,margem:margin,imposto:tax,taxas:fees,extras:extra,qtd:f.tipo==='servico'?0:(+f.qtd||0),min:f.tipo==='servico'?0:(+f.min||0),preco:price,codigo:f.codigo||'',codigoBarras:f.codigoBarras||'',categoria:f.categoria||'',unidade:f.unidade||'un',localizacao:f.localizacao||'',fornecedorNome:f.fornecedorNome||'',ncm:f.ncm||'',cest:f.cest||''});}
   if(i=='ffornecedor')put('fornecedores',{nome:f.nome.trim(),cnpj:f.cnpj||'',tel:f.tel||'',email:f.email||'',endereco:f.endereco||'',obs:f.obs||''});
   if(i=='fequipe')put('usuarios',{nome:f.nome.trim(),email:f.email||'',telefone:f.telefone||'',perfil:f.perfil||'Vendedor',ativo:f.ativo!=='0',obs:f.obs||''});
   if(i=='fcompra'){
@@ -1785,13 +1793,18 @@ async function entrar(u){
   empresaId=r.data;
 
   // empresa ainda nao liberada (ou suspensa): nao carrega nem envia nada
-  var st=await client.from('empresas').select('assinatura_status').eq('id',empresaId).maybeSingle();
+  var st=await client.from('empresas').select('assinatura_status,vencimento').eq('id',empresaId).maybeSingle();
   var statusEmp=(st.data&&st.data.assinatura_status)||'teste';
-  if(statusEmp==='pendente'||statusEmp==='suspensa'){
+  var venc=(st.data&&st.data.vencimento)||null;
+  var hojeISO=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  var vencida=!!venc&&venc<hojeISO;
+  if(statusEmp==='pendente'||statusEmp==='suspensa'||vencida){
     empresaId=null;
     show(statusEmp==='pendente'?'pendente':'suspenso');
+    if(vencida&&statusEmp!=='pendente'&&statusEmp!=='suspensa'){var sv=gate.querySelector('[data-view=suspenso] .ag-sub');if(sv)sv.innerHTML='<b>Sua assinatura venceu em '+venc.split('-').reverse().join('/')+'.</b><br>Renove para voltar a usar o sistema. Seus dados continuam guardados. Fale com o suporte para renovar.'}
     return;
   }
+  window.__vencimento=venc;
 
   // cache local de OUTRA empresa nunca pode vazar para esta conta
   var dono=null;try{dono=localStorage.getItem(OWNER_KEY)}catch(e){}
@@ -1919,6 +1932,43 @@ window.docOverlay=function(titulo){
   var buf='';
   return {document:{write:function(h){buf+=h},close:function(){fr.srcdoc=buf.replace(/<button onclick="window\.print\(\)">[^<]*<\/button>/,'').replace(/<script>setTimeout[^<]*<\/script>/,'')}}};
 };
+</script>
+<script>
+(function(){
+var st=document.createElement('style');st.textContent=`
+.fp-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.fp-head h2{margin:0 0 4px}
+.fp-body{margin-top:14px}.fp-body[hidden]{display:none}
+.fp-form{display:flex!important;flex-direction:column;gap:14px}
+.fp-sec{border:1px solid var(--ln,#dfe7e5);border-radius:14px;padding:14px 16px}
+.fp-sec h3{margin:0 0 12px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut,#51645d)}
+.fp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 14px;margin-bottom:6px}
+.fp-grid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--mut,#51645d)}
+.fp-grid label input,.fp-grid label select{width:100%;box-sizing:border-box;font-weight:400}
+.fp-wide{grid-column:auto}
+.fp-more{border:1px dashed var(--ln,#c9d6d1);border-radius:14px;padding:10px 16px}
+.fp-more summary{cursor:pointer;font-weight:700;font-size:13px;margin-bottom:6px}
+.fp-actions{display:flex;gap:10px;flex-wrap:wrap}
+.fp-actions .btn{min-width:180px}
+@media(max-width:640px){.fp-wide{grid-column:auto}}
+`;document.head.appendChild(st);
+document.addEventListener('click',function(e){var b=e.target.closest('[data-act="fptoggle"]');if(!b)return;e.stopPropagation();e.preventDefault();
+ var abrir=!window.__fpOpen;window.__fpOpen=abrir;if(!abrir){var f=document.getElementById('fp');if(f){f.reset();delete f.dataset.eid}}
+ render();if(abrir){var f2=document.getElementById('fp');if(f2){var n=f2.elements.nome;if(n)n.focus({preventScroll:false})}}},true);
+})();
+</script>
+<script>
+/* AVISO DE VENCIMENTO: faixa no topo quando faltam 5 dias ou menos */
+(function(){
+function dias(){var v=window.__vencimento;if(!v)return null;var h=new Date();h=new Date(h.getFullYear(),h.getMonth(),h.getDate());var p=v.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]);return Math.round((d-h)/86400000)}
+function atualiza(){
+  var n=dias(),el=document.getElementById('venc-aviso');
+  if(n===null||n>5||n<0){if(el)el.remove();return}
+  if(!el){el=document.createElement('div');el.id='venc-aviso';el.style.cssText='position:sticky;top:0;z-index:50;padding:10px 16px;text-align:center;font:700 13px system-ui;background:#fff3dc;color:#7a4b00;border-bottom:1px solid #f0d9a3';var h=document.querySelector('body>header');if(h&&h.parentNode)h.parentNode.insertBefore(el,h.nextSibling);else document.body.prepend(el)}
+  el.textContent=n===0?'⚠ Sua assinatura vence HOJE. Fale com o suporte para renovar e não perder o acesso.':'⚠ Sua assinatura vence em '+n+(n===1?' dia':' dias')+' ('+window.__vencimento.split('-').reverse().join('/')+'). Fale com o suporte para renovar.';
+}
+setInterval(atualiza,2000);
+})();
 </script>
 </body>
 </html>
