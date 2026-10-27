@@ -1390,6 +1390,98 @@ tr.tot td,tr.sub td{font-weight:800;border-top:1px solid var(--ln,rgba(255,255,2
 
 })();
 
+/* ===== TEMA CLARO / ESCURO ===== */
+(function(){
+const KT='gestaopro_tema';
+const LIGHT_CSS=`
+header#topbar{background:#ffffff!important;border-bottom:1px solid #e1e9e6!important;color:#14231f!important}
+header#topbar *{color:#14231f}
+body>nav,nav#nav{background:#ffffff!important;border-right:1px solid #e1e9e6!important}
+nav#nav button{background:transparent!important;color:#32463f!important;border-color:transparent!important}
+nav#nav button.on{background:#e3f5ec!important;color:#0d7a46!important;border:1px solid #9ad9b9!important}
+nav#nav button .nav-icon{background:#eef3f1!important;color:#0d7a46!important;border-color:#dfe7e5!important}
+.card,.metric-card,.kpi.card,.table-card,.chart-card,.quick-card{background:#ffffff!important;border:1px solid #e1e9e6!important;color:#14231f!important;box-shadow:0 2px 10px rgba(20,35,31,.06)!important}
+.metric-card strong,.kpi strong{color:#14231f!important}
+.metric-card::before,.metric-card::after,.kpi::after,.kpi::before{display:none!important}
+.metric-label,.metric-info,small,.muted-inline,.dre-l small,.pro-list-row small,p{color:#5f736d!important}
+h1,h2,h3,b,strong{color:#14231f}
+.welcome-copy h1 span{color:#0d9a5a!important}
+.ok,.metric-trend.positive{color:#13804a!important}.bad,.metric-trend.negative{color:#c93a47!important}
+.period-tabs{background:#fff!important;border:1px solid #dfe7e5!important}.period-tab{color:#32463f!important}.period-tab.on{background:#e3f5ec!important;color:#0d7a46!important;border-color:#9ad9b9!important}
+.value-toggle{background:#fff!important;color:#0d7a46!important;border:1px solid #cfe3d9!important}
+.notice{background:#eaf6f0!important;border:1px solid #cfe6da!important;color:#14231f!important}.notice strong{color:#0d7a46!important}.notice p{color:#32463f!important}
+.dre-l{border-color:#e6edea!important;color:#14231f!important}.dre-note{color:#5f736d!important}
+.pro-list-row{border-color:#e6edea!important;color:#14231f!important}.pro-bar{background:#e6edea!important}
+.pro-table th,.dash-table th{background:#f1f5f4!important;color:#5f736d!important}.pro-table td,.dash-table td{color:#14231f!important;border-color:#e6edea!important}
+.quick-action{box-shadow:none!important}
+.bar-revenue{background:#27b673!important}.bar-expense{background:#ef6a77!important}
+.chart-plot,.chart-y-labels span,.bc small,.legend-item,.chart-foot{color:#5f736d!important}
+.text-action{color:#0d7a46!important}
+input,select,textarea{background:#fff!important;color:#14231f!important;border:1px solid #cfdad6!important}
+.global-search,#global-search-wrap input{background:#f1f5f4!important}
+.alert-row{background:#fff!important;color:#14231f!important}
+.clickable:hover{box-shadow:0 0 0 2px #27b673,0 8px 20px rgba(20,35,31,.12)!important}
+
+.panel-heading h2,.card h2,.card h3,.panel-heading h3,.welcome-copy h1,.page-heading h1{color:#14231f!important;-webkit-text-fill-color:#14231f!important;background:none!important}
+.welcome-copy h1 span{-webkit-text-fill-color:#0d9a5a!important;color:#0d9a5a!important}
+.welcome-copy h1{text-shadow:none!important}
+#company-switch,.company-switch,header .company,header select,header button.company-btn,header [class*=company]{background:#f1f5f4!important;color:#14231f!important;border:1px solid #dfe7e5!important}
+header [class*=company] *,header .user *,header [class*=user] *,header [class*=profile] *{color:#14231f!important;-webkit-text-fill-color:#14231f!important}
+header#topbar .brand strong,header#topbar h1,header#topbar .logo-text{color:#14231f!important;-webkit-text-fill-color:#14231f!important}
+.quick-action{background:#f4f8f6!important;border:1px solid #dfe7e5!important;color:#14231f!important}
+.quick-action b{color:#14231f!important;-webkit-text-fill-color:#14231f!important}
+.quick-green span{color:#13804a!important}.quick-blue span{color:#2b7de0!important}.quick-red span{color:#c93a47!important}.quick-purple span{color:#7c4dde!important}.quick-slate span{color:#52606d!important}.quick-teal span{color:#0f9aa8!important}
+.quick-action:hover{background:#e3f5ec!important}
+.metric-icon{background:#e3f5ec!important;color:#0d7a46!important}
+.metric-label{color:#32463f!important;font-weight:700}
+.chart-badge{background:#e3f5ec!important;color:#0d7a46!important;border:1px solid #bfe3cf!important}
+.chart-plot *{border-color:#e1e9e6!important}.chart-y-labels span{background:transparent!important;color:#5f736d!important;text-decoration:none!important}
+.table-scroll th{background:#f1f5f4!important}
+.status-pill,.pro-chip{filter:none}
+.pro-chip.warn{background:#fff1d6!important;color:#9a6200!important}
+.fin-pill{color:#32463f!important;border-color:#cfdad6!important}.fin-pill.on{background:#e3f5ec!important;color:#0d7a46!important;border-color:#27b673!important}
+
+body{background:#f1f5f4!important;color:#14231f!important}
+nav#nav button::before{background:#e8f0ed!important;color:#0d7a46!important;border-color:#d4e2dc!important;box-shadow:none!important}
+nav#nav button.on::before{background:#cdeedd!important}
+.global-search{background:#f1f5f4!important;border:1px solid #dfe7e5!important}
+.global-search span,.global-search kbd{color:#5f736d!important;background:#e8f0ed!important;border:1px solid #d4e2dc!important;-webkit-text-fill-color:#5f736d!important}
+.global-search input{background:transparent!important;border:0!important;color:#14231f!important}
+.global-search-results{background:#fff!important;border:1px solid #dfe7e5!important;color:#14231f!important}
+.page-heading .eyebrow,.eyebrow{color:#0d7a46!important}
+.value-toggle .eye-icon{color:#0d7a46!important}
+header#topbar .user-menu *, header#topbar [class*=account] *{color:#14231f!important}
+.top-icon-button{background:#fff!important;color:#32463f!important;border:1px solid #dfe7e5!important}
+#tema-toggle{font-size:18px}
+.notification-popover{background:#fff!important;color:#14231f!important;border:1px solid #e1e9e6!important}
+.notification-popover *{color:#14231f}
+.global-search-popup,.search-popup{background:#fff!important;color:#14231f!important}
+.data-row,.row{background:#fff!important;border-color:#e6edea!important;color:#14231f!important}
+.row b,.data-row strong{color:#14231f!important}
+.btn.s{background:#f1f5f4!important;color:#14231f!important;border:1px solid #cfdad6!important}
+.btn.s.d{color:#c93a47!important}
+.table-wrap,.table-scroll{background:#fff!important}
+.pro-table td,.pro-table th{border-color:#e6edea!important}
+.kpi small{color:#5f736d!important}
+.empty,.table-empty{color:#5f736d!important;border-color:#dfe7e5!important;background:#fafcfb!important}
+.tag{background:#eef3f1!important;color:#32463f!important}
+.tag.l{background:#e3f5ec!important;color:#0d7a46!important}
+.tag.p{background:#fff1d6!important;color:#9a6200!important}
+.cmp-total{background:#eaf6f0!important;color:#14231f!important}
+.cnt-sum{background:#f1f5f4!important}
+.section-search{background:#fff!important}
+.module-two-col .card,.dash-columns .card{background:#fff!important}
+`;
+const pref=c=>c.replace(/(^|\})\s*([^{}]+)\{/g,(m,a,sel)=>a+sel.split(',').map(s=>'html[data-tema=claro] '+s.trim()).join(',')+'{');
+const st=document.createElement('style');st.id='tema-css';st.textContent='html[data-tema=claro]{--bg:#f4f7f6;--card:#fff;--tx:#14231f;--mut:#5f736d;--ln:#e1e9e6;--ok:#13804a;--bad:#c93a47;color-scheme:light}'+pref(LIGHT_CSS);document.head.appendChild(st);
+const ler=()=>{try{return localStorage.getItem(KT)||'claro'}catch(e){return 'claro'}};
+const aplicar=t=>{document.documentElement.setAttribute('data-tema',t);const b=document.getElementById('tema-toggle');if(b){b.textContent=t==='claro'?'☾':'☀';b.title=t==='claro'?'Mudar para o tema escuro':'Mudar para o tema claro';b.setAttribute('aria-label',b.title)}};
+window.alternarTema=()=>{const n=document.documentElement.getAttribute('data-tema')==='claro'?'escuro':'claro';try{localStorage.setItem(KT,n)}catch(e){}aplicar(n)};
+aplicar(ler());
+const ins=()=>{if(document.getElementById('tema-toggle'))return;const nb=document.getElementById('notification-toggle');const wrap=nb&&nb.closest('.notification-wrap');if(!wrap)return;const b=document.createElement('button');b.type='button';b.id='tema-toggle';b.className='top-icon-button';wrap.parentNode.insertBefore(b,wrap);b.addEventListener('click',window.alternarTema);aplicar(ler())};
+ins();
+})();
+
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4" crossorigin="anonymous"></script>
