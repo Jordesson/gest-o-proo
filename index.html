@@ -649,7 +649,7 @@ despesas(){
   <div class="card"><div class="panel-heading"><h2>Histórico de despesas</h2><input id="busca-despesas" class="section-search" placeholder="Buscar despesa..." aria-label="Buscar despesas"><span class="chart-badge">${L.length} registro(s)</span></div>${L.length?L.map(l=>`<div class="row" data-search-group="despesas" data-q="${esc((l.desc+' '+l.data+' '+l.valor+' '+(l.pago?'paga':'pendente')).toLowerCase())}"><div class="i"><b>${esc(l.desc)}</b><small>${fd(l.data||hoje())}</small></div><div class="act"><strong class="bad">${brl(l.valor)}</strong><span class="tag ${l.pago?'l':'p'}">${l.pago?'Pago':'Pendente'}</span><button class="btn s" data-act="edl" data-id="${l.id}">Editar</button><button class="btn s" data-act="tg" data-id="${l.id}">${l.pago?'Marcar pendente':'Marcar pago'}</button><button class="btn s d" data-act="dell" data-id="${l.id}">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhuma despesa registrada.</div>'}</div>`},
 fin(){
   const L=db.lanc.filter(l=>l.data.startsWith(mes)).sort((a,b)=>b.data.localeCompare(a.data));
-  const nome=id=>(db.clientes.find(c=>c.id==id)||{}).nome||'';
+  const cmap=new Map(db.clientes.map(c=>[String(c.id),c.nome])),nome=id=>cmap.get(String(id))||'';
   const vendasMes=sum(L.filter(l=>l.venda&&l.tipo=='receita'));
   const servicosMes=sum(L.filter(l=>l.servico&&l.tipo=='receita'));
   return `<div class="card"><h2>Financeiro</h2>
@@ -706,9 +706,9 @@ estoque(){
   <div class="card"><h2>Serviços</h2>${servicos.length?servicos.map(p=>`<div class="row" data-search-group="produtos" data-q="${esc((p.nome+' serviço '+p.preco).toLowerCase())}"><div class="i"><b>${esc(p.nome)}</b><small>Custo ${brl(p.custo||0)} · preço de venda ${brl(p.preco)} · margem ${p.margem??'—'}%</small></div><div class="act"><button class="btn s" data-act="edp" data-id="${p.id}">Editar</button><button class="btn s d" data-act="delp" data-id="${p.id}">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhum serviço cadastrado.</div>'}</div>`},
 vendas(){
   const todas=db.lanc.filter(l=>l.venda).sort((a,b)=>b.data.localeCompare(a.data));
-  const grupos=[];todas.forEach(l=>{const key=l.saleId||l.id;let g=grupos.find(x=>x.key===key);if(!g){g={key,items:[],data:l.data,cli:l.cli,pago:l.pago,num:l.nota||''};grupos.push(g)}g.items.push(l)});
+  const grupos=[],gmap=new Map();todas.forEach(l=>{const key=l.saleId||l.id;let g=gmap.get(key);if(!g){g={key,items:[],data:l.data,cli:l.cli,pago:l.pago,num:l.nota||''};gmap.set(key,g);grupos.push(g)}g.items.push(l)});
   const V=grupos,tm=sum(todas.filter(l=>l.data.startsWith(mes)));
-  const nome=id=>(db.clientes.find(c=>c.id==id)||{}).nome||'';
+  const cmap=new Map(db.clientes.map(c=>[String(c.id),c.nome])),nome=id=>cmap.get(String(id))||'';
   const options=db.prod.filter(p=>p.tipo==='servico'||(p.qtd||0)>0).map(p=>`<option value="${p.id}">${p.tipo==='servico'?'Serviço':'Produto'}: ${esc(p.nome)}${p.tipo==='servico'?'':' ('+(p.qtd||0)+' em estoque)'}</option>`).join('');
   return `<div class="card"><div class="panel-heading"><h2>Vendas <small style="color:var(--mut);font-weight:400">· no mês ${brl(tm)}</small></h2><input id="busca-vendas" class="section-search" placeholder="Buscar venda, cliente ou produto..." aria-label="Buscar vendas"></div>
   <form id="fv"><label>Cliente</label><select name="cli"><option value="">Sem cliente</option>${db.clientes.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select>
@@ -1793,7 +1793,7 @@ function status(k){
 }
 
 /* ---------- envio para a nuvem ---------- */
-function agendar(ms){clearTimeout(timer);timer=setTimeout(enviar,ms==null?1200:ms)}
+function agendar(ms){clearTimeout(timer);timer=setTimeout(enviar,ms==null?2500:ms)}
 window.cloudPush=function(){if(!empresaId)return;ver++;dirty=true;status('pending');agendar()};
 
 async function enviar(){
@@ -2239,8 +2239,117 @@ function injetaCam(){
 })();
 /* ---- gancho no render ---- */
 var r0=window.render;
-window.render=function(){var x=r0.apply(this,arguments);try{injetaImport();injetaCam();vencBar();fab();setTimeout(onb,1200)}catch(err){console.error(err)}return x};
+window.render=function(){var x=r0.apply(this,arguments);try{injetaImport();injetaCam();fab();setTimeout(onb,1200)}catch(err){console.error(err)}return x};
 try{fab()}catch(e){}
+})();
+</script>
+<script>
+/* CELULAR RAPIDO: barra inferior + menu em gaveta + topo compacto + listas leves + salvar sem travar */
+(function(){
+var MQ=window.matchMedia('(max-width:760px)');
+var css=document.createElement('style');css.textContent=
+'#tabbar,#menu-sheet,#menu-fundo{display:none}'+
+'@media(max-width:760px){'+
+ 'body>nav#nav{display:none!important}'+
+ 'body>header#topbar{display:flex!important;flex-wrap:nowrap!important;align-items:center;gap:6px!important;min-height:54px!important;padding:6px 10px!important;padding-top:max(6px,env(safe-area-inset-top))!important}'+
+ 'body>header#topbar .top-brand{flex:1 1 auto!important;min-width:0!important}body>header#topbar .brand-copy{display:none}'+
+ 'body>header#topbar .company-picker{order:0;flex:0 1 38%!important;min-width:0;max-width:150px;height:34px!important}'+
+ 'body>header#topbar .company-picker small,body>header#topbar .company-picker .picker-chevron{display:none}'+
+ 'body>header#topbar .global-search{display:none!important}'+
+ 'body.busca-aberta>header#topbar{flex-wrap:wrap!important}body.busca-aberta>header#topbar .global-search{display:flex!important;order:9;flex:1 1 100%!important;height:40px}'+
+ '#btn-busca{display:inline-grid!important}'+
+ 'body>main#app{padding-bottom:calc(86px + env(safe-area-inset-bottom))!important}'+
+ 'input,select,textarea{font-size:16px!important}'+
+ '.btn,button.btn{min-height:44px}'+
+ '#tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:800;background:var(--card,#fff);border-top:1px solid var(--ln,#dfe7e5);padding:6px 6px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -4px 16px #0001}'+
+ '#tabbar button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:transparent;color:var(--mut,#6b7c78);font:600 11px system-ui;padding:6px 2px;border-radius:12px;cursor:pointer;min-height:48px}'+
+ '#tabbar button i{font-style:normal;font-size:20px;line-height:1}'+
+ '#tabbar button.on{color:#0a7a5c;background:rgba(15,159,122,.12)}'+
+ '#fab{bottom:calc(84px + env(safe-area-inset-bottom))!important;right:14px!important}#fab-btn{width:52px!important;height:52px!important}'+
+ '#menu-fundo.on{display:block;position:fixed;inset:0;background:rgba(10,20,17,.55);z-index:900}'+
+ '#menu-sheet.on{display:flex;flex-direction:column;position:fixed;left:0;right:0;bottom:0;max-height:86dvh;z-index:901;background:var(--card,#fff);color:var(--tx,#1c2a27);border-radius:20px 20px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));overflow-y:auto;box-shadow:0 -10px 40px #0004}'+
+ '#menu-sheet h4{margin:14px 4px 6px;font-size:11px;letter-spacing:.12em;color:var(--mut,#6b7c78)}'+
+ '#menu-sheet .ms-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}'+
+ '#menu-sheet .ms-grid button{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--ln,#dfe7e5);background:var(--bg,#f6f9f8);color:inherit;border-radius:14px;padding:12px 4px;font:600 12px system-ui;min-height:76px;cursor:pointer}'+
+ '#menu-sheet .ms-grid button i{font-style:normal;font-size:24px}'+
+ '#menu-sheet .ms-grid button.on{border-color:#0f9f7a;background:rgba(15,159,122,.12);color:#0a7a5c}'+
+ '#menu-sheet .ms-top{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:16px}'+
+ '#menu-sheet .ms-top button{border:0;background:var(--bg,#eee);width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;color:inherit}'+
+ '#menu-sheet .ms-modo{margin-top:14px;border:1px dashed var(--ln,#c9d6d1);background:transparent;color:inherit;border-radius:12px;padding:12px;font:600 13px system-ui;cursor:pointer}'+
+ '.overlay,.onb-ov{align-items:flex-end}'+
+'}'+
+'@media(min-width:761px){#btn-busca{display:none!important}}'+
+'#btn-busca{display:none}'+
+'.lim-mais{display:block;width:100%;margin:10px 0;padding:13px;border:1px dashed var(--ln,#c9d6d1);border-radius:12px;background:transparent;color:inherit;font:700 14px system-ui;cursor:pointer}';
+document.head.appendChild(css);
+/* ---- barra inferior + gaveta ---- */
+var PRINC=['painel','pdv','vendas','estoque'];
+function bar(){
+  var tb=document.getElementById('tabbar');if(!tb){tb=document.createElement('div');tb.id='tabbar';document.body.appendChild(tb)}
+  var ic=(typeof navIcons!=='undefined'?navIcons:{});var nome={painel:'Início',pdv:'Vender',vendas:'Vendas',estoque:'Estoque'};
+  var h=PRINC.map(function(k){return '<button type="button" data-tab="'+k+'" class="'+(tab===k?'on':'')+'"><i>'+(ic[k]||'•')+'</i>'+nome[k]+'</button>'}).join('');
+  h+='<button type="button" data-menu="1" class="'+(PRINC.indexOf(tab)<0?'on':'')+'"><i>☰</i>Menu</button>';
+  tb.innerHTML=h;
+}
+var GRUPOS=[['VENDER',['pdv','vendas','orc','devolucoes']],['COMPRAR',['compras','fornecedores']],['ESTOQUE',['estoque','catalogo','inventario']],['DINHEIRO',['despesas','fin','caixas','rel','analise']],['PESSOAS',['clientes','equipe']],['EMPRESA',['dados']]];
+var AVANC=['orc','devolucoes','inventario','caixas','equipe','analise'];
+function abreMenu(){
+  var simples=(localStorage.getItem('gestaopro_modo')||'simples')==='simples',ic=(typeof navIcons!=='undefined'?navIcons:{});
+  var fundo=document.getElementById('menu-fundo'),sh=document.getElementById('menu-sheet');
+  if(!fundo){fundo=document.createElement('div');fundo.id='menu-fundo';document.body.appendChild(fundo);sh=document.createElement('div');sh.id='menu-sheet';document.body.appendChild(sh);fundo.onclick=fechaMenu}
+  var h='<div class="ms-top"><span>Menu</span><button type="button" data-menu-x="1" aria-label="Fechar">✕</button></div><button type="button" data-tab="painel" class="ms-modo" style="margin-top:10px">⌂ Ir para o Início</button>';
+  GRUPOS.forEach(function(g){var ks=g[1].filter(function(k){return tabs[k]&&!(simples&&AVANC.indexOf(k)>=0&&k!==tab)});if(!ks.length)return;
+    h+='<h4>'+g[0]+'</h4><div class="ms-grid">'+ks.map(function(k){return '<button type="button" data-tab="'+k+'" class="'+(tab===k?'on':'')+'"><i>'+(ic[k]||'•')+'</i>'+tabs[k]+'</button>'}).join('')+'</div>'});
+  h+='<button type="button" class="ms-modo" data-act="modo-toggle">'+(simples?'☰ Mostrar todos os módulos':'✓ Voltar ao modo simples')+'</button><button type="button" class="ms-modo" data-tema-menu="1">🌓 Trocar tema claro/escuro</button>';
+  sh.innerHTML=h;fundo.classList.add('on');sh.classList.add('on');
+}
+function fechaMenu(){var f=document.getElementById('menu-fundo'),s=document.getElementById('menu-sheet');if(f)f.classList.remove('on');if(s)s.classList.remove('on')}
+document.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('[data-menu]');if(t){e.preventDefault();e.stopPropagation();abreMenu();return}
+  if(e.target.closest&&e.target.closest('[data-menu-x]')){fechaMenu();return}
+  var tm=e.target.closest&&e.target.closest('[data-tema-menu]');if(tm){fechaMenu();var b=document.getElementById('tema-toggle');if(b)b.click();return}
+  var sb=e.target.closest&&e.target.closest('#btn-busca');if(sb){document.body.classList.toggle('busca-aberta');if(document.body.classList.contains('busca-aberta')){var i=document.getElementById('global-search');if(i)setTimeout(function(){i.focus()},50)}return}
+  if(e.target.closest&&e.target.closest('#menu-sheet [data-tab],#menu-sheet [data-act]')){setTimeout(fechaMenu,0)}
+  if(e.target.closest&&e.target.closest('#tabbar [data-tab]')){document.body.classList.remove('busca-aberta')}
+},true);
+/* icone de busca no topo (celular) */
+function btnBusca(){
+  var ta=document.querySelector('.top-actions');if(!ta||document.getElementById('btn-busca'))return;
+  var b=document.createElement('button');b.type='button';b.id='btn-busca';b.className='top-icon-button';b.title='Buscar';b.setAttribute('aria-label','Buscar');b.textContent='🔍';ta.insertBefore(b,ta.firstChild);
+}
+/* ---- listas leves: mostra 40 e libera o resto sob demanda ---- */
+var LIM=40;
+function limitar(){
+  var paisVistos=new Set();
+  document.querySelectorAll('#app [data-q]').forEach(function(r){var p=r.parentElement;if(p&&!paisVistos.has(p))paisVistos.add(p)});
+  paisVistos.forEach(function(p){
+    var rows=Array.prototype.filter.call(p.children,function(c){return c.hasAttribute('data-q')});
+    var more=p.querySelector(':scope>.lim-mais');
+    if(rows.length<=LIM+10){if(more)more.remove();rows.forEach(function(r){r.classList.remove('lim-x')});return}
+    var pesq=pesquisando(),vis=0,ocultos=0;
+    rows.forEach(function(r){if(r.hidden){r.classList.remove('lim-x');return}vis++;if(!pesq&&vis>(+p.dataset.lim||LIM)){r.classList.add('lim-x');ocultos++}else r.classList.remove('lim-x')});
+    if(ocultos>0){if(!more){more=document.createElement('button');more.type='button';more.className='lim-mais';p.insertBefore(more,rows[rows.length-1].nextSibling);more.onclick=function(){p.dataset.lim=(+p.dataset.lim||LIM)+LIM;limitar()}}
+      more.textContent='Mostrar mais ('+ocultos+' restantes)';more.style.display=''}
+    else if(more)more.style.display='none';
+  });
+}
+function pesquisando(){var v=false;document.querySelectorAll('#app input[type=search],#app .section-search,#app #busca,#app #pdv-search,#app #cat-busca,#app .bar2 input').forEach(function(i){if(i.value&&i.value.trim())v=true});return v}
+var lx=document.createElement('style');lx.textContent='.lim-x{display:none!important}';document.head.appendChild(lx);
+document.addEventListener('input',function(e){if(e.target&&e.target.closest&&e.target.closest('#app'))setTimeout(limitar,30)},false);
+/* ---- salvar sem travar: grava no aparelho em lote (a nuvem ja agrupa os envios) ---- */
+(function(){
+  var t=null;
+  function gravar(){if(t){clearTimeout(t);t=null}try{localStorage.setItem(K,JSON.stringify(db))}catch(e){alert('Não foi possível salvar neste navegador.')}}
+  window.save=function(){if(t)clearTimeout(t);t=setTimeout(gravar,350);if(window.cloudPush)window.cloudPush()};
+  window.__gravarAgora=function(){if(t)gravar()};
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')window.__gravarAgora()});
+  window.addEventListener('pagehide',window.__gravarAgora);window.addEventListener('beforeunload',window.__gravarAgora);
+})();
+/* ---- gancho no render ---- */
+var r0=window.render;
+window.render=function(){var x=r0.apply(this,arguments);try{btnBusca();bar();limitar()}catch(err){console.error(err)}return x};
+window.addEventListener('resize',function(){try{bar()}catch(e){}});
+try{btnBusca();bar()}catch(e){}
 })();
 </script>
 <script>
@@ -2275,7 +2384,7 @@ function atualiza(){
   var n=dias(),el=document.getElementById('venc-aviso');
   if(n===null||n>5||n<0){if(el)el.remove();return}
   if(!el){el=document.createElement('div');el.id='venc-aviso';el.style.cssText='position:sticky;top:0;z-index:50;padding:10px 16px;text-align:center;font:700 13px system-ui;background:#fff3dc;color:#7a4b00;border-bottom:1px solid #f0d9a3';var h=document.querySelector('body>header');if(h&&h.parentNode)h.parentNode.insertBefore(el,h.nextSibling);else document.body.prepend(el)}
-  el.textContent=n===0?'⚠ Sua assinatura vence HOJE. Fale com o suporte para renovar e não perder o acesso.':'⚠ Sua assinatura vence em '+n+(n===1?' dia':' dias')+' ('+window.__vencimento.split('-').reverse().join('/')+'). Fale com o suporte para renovar.';
+  el.innerHTML=(n===0?'⚠ Sua assinatura vence HOJE. Fale com o suporte para renovar e não perder o acesso.':'⚠ Sua assinatura vence em '+n+(n===1?' dia':' dias')+' ('+window.__vencimento.split('-').reverse().join('/')+'). Fale com o suporte para renovar.')+' <a target="_blank" rel="noopener" style="margin-left:8px;background:#0f9f7a;color:#fff;padding:5px 12px;border-radius:8px;text-decoration:none" href="https://wa.me/5588921002123?text=Ol%C3%A1!%20Quero%20renovar%20meu%20acesso%20ao%20Gest%C3%A3o%20Pro">Renovar pelo WhatsApp</a>';
 }
 setInterval(atualiza,2000);
 })();
