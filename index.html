@@ -2249,6 +2249,7 @@ try{fab()}catch(e){}
 var MQ=window.matchMedia('(max-width:760px)');
 var css=document.createElement('style');css.textContent=
 '#tabbar,#menu-sheet,#menu-fundo{display:none}'+
+'@media(max-width:760px){.ir,.sale-ir{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 44px!important;gap:8px!important}.ir>select,.ir>input[list],.sale-ir>select{grid-column:1/-1!important}.ir>*,.sale-ir>*{min-width:0!important;width:100%!important;box-sizing:border-box}.ir>input[name=q],.ir>input[name=itemqtd],.sale-ir>input[name=itemqtd]{grid-column:1}.ir>button,.sale-ir>button{padding:0!important;height:100%}main,#app{padding-bottom:96px!important}}'+
 '@media(max-width:760px){'+
  'body>nav#nav{display:none!important}'+
  'body>header#topbar{display:flex!important;flex-wrap:nowrap!important;align-items:center;gap:6px!important;min-height:54px!important;padding:6px 10px!important;padding-top:max(6px,env(safe-area-inset-top))!important}'+
@@ -2286,7 +2287,7 @@ document.head.appendChild(css);
 var PRINC=['painel','pdv','vendas','estoque'];
 function bar(){
   var tb=document.getElementById('tabbar');if(!tb){tb=document.createElement('div');tb.id='tabbar';document.body.appendChild(tb)}
-  var ic=(typeof navIcons!=='undefined'?navIcons:{});var nome={painel:'Início',pdv:'Vender',vendas:'Vendas',estoque:'Estoque'};
+  var ic=Object.assign({},(typeof navIcons!=='undefined'?navIcons:{}),{vendas:'✓'});var nome={painel:'Início',pdv:'Vender',vendas:'Vendas',estoque:'Estoque'};
   var h=PRINC.map(function(k){return '<button type="button" data-tab="'+k+'" class="'+(tab===k?'on':'')+'"><i>'+(ic[k]||'•')+'</i>'+nome[k]+'</button>'}).join('');
   h+='<button type="button" data-menu="1" class="'+(PRINC.indexOf(tab)<0?'on':'')+'"><i>☰</i>Menu</button>';
   tb.innerHTML=h;
