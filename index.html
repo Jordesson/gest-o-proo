@@ -1857,7 +1857,7 @@ async function entrar(u){
   if(statusEmp==='pendente'||statusEmp==='suspensa'||vencida){
     empresaId=null;
     show(statusEmp==='pendente'?'pendente':'suspenso');
-    if(vencida&&statusEmp!=='pendente'&&statusEmp!=='suspensa'){var sv=gate.querySelector('[data-view=suspenso] .ag-sub');if(sv)sv.innerHTML='<b>Sua assinatura venceu em '+venc.split('-').reverse().join('/')+'.</b><br>Renove para voltar a usar o sistema. Seus dados continuam guardados. Fale com o suporte para renovar.'}
+    if(vencida&&statusEmp!=='pendente'&&statusEmp!=='suspensa'){var sv=gate.querySelector('[data-view=suspenso] .ag-sub');if(sv)sv.innerHTML='<b>Sua assinatura venceu em '+venc.split('-').reverse().join('/')+'.</b><br>Renove para voltar a usar o sistema. Seus dados continuam guardados.<br><a href="https://wa.me/5588921002123?text=Ol%C3%A1!%20Quero%20renovar%20meu%20acesso%20ao%20Gest%C3%A3o%20Pro" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;padding:10px 18px;border-radius:10px;background:#0f9f7a;color:#fff;font-weight:700;text-decoration:none">Renovar pelo WhatsApp</a>'}
     return;
   }
   window.__vencimento=venc;
@@ -2069,6 +2069,178 @@ var r0=window.render;
 window.render=function(){var x=r0.apply(this,arguments);try{enhance()}catch(err){console.error(err)}return x};
 if(typeof ed==='function'){var e0=ed;window.ed=function(fid){if(CFG[fid])window.__fOpen[fid]=true;return e0.apply(this,arguments)}}
 try{enhance()}catch(err){}
+})();
+</script>
+<script>
+/* SIMPLES + VERSATIL: menu por grupos, modo Simples, botao +, primeiro acesso, importar CSV, celular, camera */
+(function(){
+var MODO_KEY='gestaopro_modo';
+function getModo(){try{return localStorage.getItem(MODO_KEY)||'simples'}catch(e){return 'simples'}}
+function setModo(m){try{localStorage.setItem(MODO_KEY,m)}catch(e){}document.documentElement.setAttribute('data-modo',m)}
+document.documentElement.setAttribute('data-modo',getModo());
+tabs.pdv='Vender (PDV)';tabs.vendas='Vendas e notas';
+var GRUPOS=[['',['painel']],['VENDER',['pdv','vendas','orc','devolucoes']],['COMPRAR',['compras','fornecedores']],['ESTOQUE',['estoque','catalogo','inventario']],['DINHEIRO',['despesas','fin','caixas','rel','analise']],['PESSOAS',['clientes','equipe']],['EMPRESA',['dados']]];
+var AVANC=['orc','devolucoes','inventario','caixas','equipe','analise'];
+var CHEV=['vendas','despesas','clientes','estoque','fin','rel','orc'];
+window.nav=function(){
+  var simples=getModo()==='simples',h='',usados={};
+  GRUPOS.forEach(function(g){
+    var ks=g[1].filter(function(k){return tabs[k]&&!(simples&&AVANC.indexOf(k)>=0&&k!==tab)});
+    ks.forEach(function(k){usados[k]=1});
+    if(!ks.length)return;
+    if(g[0])h+='<div class="nav-sec">'+g[0]+'</div>';
+    ks.forEach(function(k){h+='<button type="button" data-tab="'+k+'" class="'+(k==tab?'on':'')+'" title="'+tabs[k]+'"><span class="nav-icon" aria-hidden="true">'+(navIcons[k]||'•')+'</span><span class="nav-label">'+tabs[k]+'</span>'+(CHEV.indexOf(k)>=0?'<span class="nav-chevron">›</span>':'')+'</button>'});
+  });
+  Object.keys(tabs).forEach(function(k){if(!usados[k]&&!(simples&&AVANC.indexOf(k)>=0)){h+='<button type="button" data-tab="'+k+'" class="'+(k==tab?'on':'')+'"><span class="nav-icon">'+(navIcons[k]||'•')+'</span><span class="nav-label">'+tabs[k]+'</span></button>'}});
+  h+='<button type="button" class="nav-modo" data-act="modo-toggle">'+(simples?'☰ Mostrar todos os módulos':'✓ Voltar ao modo simples')+'</button>';
+  document.getElementById('nav').innerHTML=h;
+};
+/* ---- css ---- */
+var css=document.createElement('style');css.textContent=
+'.nav-sec{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--mut,#6b7c78);padding:12px 14px 4px;opacity:.85}'+
+'.nav-modo{margin-top:12px;font-size:12px!important;opacity:.85;border:1px dashed var(--ln,#c9d6d1)!important;background:transparent!important}'+
+'@media(max-width:760px){.nav-sec{display:none}.nav-modo{white-space:nowrap}}'+
+'html[data-modo=simples] #app .small-notice{display:none}'+
+'#fab{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:900}'+
+'#fab-btn{width:58px;height:58px;border-radius:50%;border:0;background:linear-gradient(135deg,#0b926f,#0dba87);color:#fff;font-size:32px;line-height:1;cursor:pointer;box-shadow:0 8px 24px #0a6b4f66;transition:transform .2s}'+
+'#fab.open #fab-btn{transform:rotate(45deg)}'+
+'#fab-menu{position:absolute;right:0;bottom:70px;display:none;flex-direction:column;gap:8px;align-items:flex-end}#fab.open #fab-menu{display:flex}'+
+'#fab-menu button{white-space:nowrap;border:1px solid var(--ln,#dfe7e5);background:var(--card,#fff);color:var(--tx,#1c2a27);padding:11px 16px;border-radius:30px;font:700 14px system-ui;cursor:pointer;box-shadow:0 4px 14px #0002}'+
+'@media print{#fab{display:none}}'+
+'.venc-bar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 14px;border-radius:12px;background:#fff3dc;color:#7a5200;border:1px solid #f0d9a3;margin-bottom:12px;font-size:13px;font-weight:600}.venc-bar.urg{background:#fde2e6;color:#a01c34;border-color:#f0b8c2}.venc-bar a{background:#0f9f7a;color:#fff;text-decoration:none;padding:7px 14px;border-radius:9px;font-weight:700}'+
+'.onb-ov,.scan-ov{position:fixed;inset:0;z-index:99998;background:rgba(10,20,17,.78);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}'+
+'.onb-ov form.onb{display:block!important}.onb *{box-sizing:border-box}.onb input,.onb select{width:100%}.onb{background:#fff;color:#16241f;border-radius:18px;width:min(560px,100%);padding:26px;box-shadow:0 20px 60px #0008;font-family:system-ui,sans-serif}.onb h2{margin:0 0 4px;font-size:22px}.onb p{margin:0 0 16px;color:#51645d;font-size:14px}.onb h3{margin:18px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#51645d}.onb label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:#3d514a;margin-bottom:10px}.onb input,.onb select{padding:11px 12px;border:1px solid #c9d6d1;border-radius:10px;font-size:15px;background:#fff;color:#16241f}.onb .r{display:grid;grid-template-columns:1fr 1fr;gap:10px}.onb .b{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.onb .b button{padding:13px 22px;border-radius:11px;border:1px solid #c9d6d1;background:#fff;color:#16241f;font:700 15px system-ui;cursor:pointer}.onb .b .go{background:#0f9f7a;color:#fff;border:0;flex:1}'+
+'.scan-box{background:#000;border-radius:16px;overflow:hidden;width:min(520px,100%);position:relative}.scan-box video{width:100%;display:block;max-height:70vh;object-fit:cover}.scan-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;background:#111;color:#fff;font:600 14px system-ui}.scan-bar button{padding:9px 16px;border-radius:9px;border:0;background:#fff;font-weight:700;cursor:pointer}.scan-line{position:absolute;left:8%;right:8%;top:50%;height:2px;background:#ff3b5c;box-shadow:0 0 10px #ff3b5c}'+
+'.cam-btn{color:#16241f;border:1px solid var(--ln,#c9d6d1);background:var(--card,#fff);border-radius:10px;padding:0 12px;cursor:pointer;font-size:18px}.cam-wrap{display:flex;gap:6px;align-items:stretch}.cam-wrap input{flex:1;min-width:0}'+
+'.imp-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}';
+document.head.appendChild(css);
+/* ---- cliques ---- */
+document.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('[data-act="modo-toggle"]');
+  if(t){e.stopPropagation();e.preventDefault();var m=getModo()==='simples'?'completo':'simples';setModo(m);if(m==='simples'&&AVANC.indexOf(tab)>=0)tab='painel';render();return}
+  var fb=e.target.closest&&e.target.closest('#fab-btn');if(fb){document.getElementById('fab').classList.toggle('open');return}
+  var fi=e.target.closest&&e.target.closest('[data-fab]');
+  if(fi){document.getElementById('fab').classList.remove('open');var k=fi.dataset.fab;
+    var MAP={venda:['pdv',null],compra:['compras','fcompra2'],despesa:['despesas','ff'],cliente:['clientes','fc'],produto:['estoque','fp']};var m=MAP[k];
+    if(m[1]==='fp')window.__fpOpen=true;else if(m[1])window.__fOpen[m[1]]=true;
+    tab=m[0];orcv=null;render();return}
+  if(!(e.target.closest&&e.target.closest('#fab'))){var f=document.getElementById('fab');if(f)f.classList.remove('open')}
+  var ib=e.target.closest&&e.target.closest('[data-act="imp-modelo"]');
+  if(ib){e.preventDefault();e.stopPropagation();modeloCsv(ib.dataset.tipo);return}
+  var cb=e.target.closest&&e.target.closest('[data-scan]');
+  if(cb){e.preventDefault();e.stopPropagation();escanear(cb.dataset.scan);return}
+},true);
+/* PDV: caixa abre sozinho no modo simples */
+document.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('[data-act="pdvfinish"]');if(!t||getModo()!=='simples')return;
+  if(!activeCash()&&pdvCart&&pdvCart.length){db.caixas.push({id:uid(),operador:(db.empresa&&db.empresa.nome)||'Caixa',saldoInicial:0,abertoEm:new Date().toISOString(),status:'aberto',auto:true})}
+},true);
+/* ---- botao + ---- */
+function fab(){
+  if(document.getElementById('fab'))return;var d=document.createElement('div');d.id='fab';
+  d.innerHTML='<div id="fab-menu"><button data-fab="venda">🛒 Nova venda</button><button data-fab="compra">⇩ Nova compra</button><button data-fab="despesa">▤ Nova despesa</button><button data-fab="cliente">♧ Novo cliente</button><button data-fab="produto">⬡ Novo produto</button></div><button id="fab-btn" aria-label="Criar novo">+</button>';
+  document.body.appendChild(d);
+}
+/* ---- primeiro acesso ---- */
+function onbPrecisa(){
+  if(window.__vencimento===undefined)return false;
+  var ga=document.getElementById('auth-gate');if(ga&&getComputedStyle(ga).display!=='none')return false;
+  try{if(localStorage.getItem('gp_onb_ok'))return false}catch(e){}
+  return !(db.empresa&&db.empresa.nome)&&!(db.prod&&db.prod.length)&&!(db.clientes&&db.clientes.length)&&!(db.lanc&&db.lanc.length);
+}
+function onb(){
+  if(document.getElementById('onb')||!onbPrecisa())return;
+  var ov=document.createElement('div');ov.id='onb';ov.className='onb-ov';
+  ov.innerHTML='<form class="onb"><h2>Bem-vindo ao Gestão Pro 👋</h2><p>Leva 1 minuto. Depois é só vender.</p><label>Nome da sua empresa *<input name="nome" required placeholder="Ex.: Loja da Maria"></label><div class="r"><label>Tipo de negócio<select name="seg"><option>Loja / comércio</option><option>Prestação de serviços</option><option>Lanchonete / alimentação</option><option>Oficina / peças</option><option>Gráfica / personalizados</option><option>Outro</option></select></label><label>WhatsApp da empresa<input name="tel" inputmode="tel" placeholder="(00) 90000-0000"></label></div><h3>Primeiro produto ou serviço (opcional)</h3><label>Nome<input name="pn" placeholder="Ex.: Camiseta, Corte de cabelo"></label><div class="r"><label>Quanto você paga (custo) R$<input name="pc" type="number" step="0.01" min="0" placeholder="0,00"></label><label>Preço de venda R$<input name="pp" type="number" step="0.01" min="0" placeholder="0,00"></label></div><div class="r"><label>Quantidade em estoque<input name="pq" type="number" min="0" value="0"></label><label>É um...<select name="pt"><option value="produto">Produto</option><option value="servico">Serviço</option></select></label></div><div class="b"><button type="submit" class="go">Começar a usar</button><button type="button" data-onb-pular>Pular por enquanto</button></div></form>';
+  document.body.appendChild(ov);
+  ov.querySelector('[data-onb-pular]').onclick=function(){try{localStorage.setItem('gp_onb_ok','1')}catch(e){}ov.remove()};
+  ov.querySelector('form').onsubmit=function(ev){ev.preventDefault();var f=ev.target.elements;
+    var nome=f.nome.value.trim();if(!nome)return;
+    db.empresa=Object.assign({},db.empresa,{nome:nome,tel:f.tel.value.trim(),segmento:f.seg.value});db.emp=nome;
+    var pn=f.pn.value.trim();
+    if(pn){var c=Math.max(0,+f.pc.value||0),p=Math.max(0,+f.pp.value||0),serv=f.pt.value==='servico';
+      var mg=p>0?Math.max(0,Math.min(99,Math.round((1-c/p)*1000)/10)):30;
+      db.prod.push({id:uid(),tipo:serv?'servico':'produto',nome:pn,custo:c,margem:mg,imposto:0,taxas:0,extras:0,qtd:serv?0:Math.max(0,+f.pq.value||0),min:0,preco:p,codigo:'',codigoBarras:'',categoria:'',unidade:'un',localizacao:'',fornecedorNome:'',ncm:'',cest:''})}
+    try{localStorage.setItem('gp_onb_ok','1')}catch(e){}
+    save();ov.remove();tab=pn?'pdv':'painel';render()};
+}
+/* ---- aviso de vencimento ---- */
+function vencBar(){
+  var v=window.__vencimento;var app=document.getElementById('app');if(!v||!app||tab==='pdv')return;
+  var h=hoje();var dias=Math.round((new Date(v+'T12:00:00')-new Date(h+'T12:00:00'))/86400000);if(dias>7)return;
+  var el=document.createElement('div');el.className='venc-bar'+(dias<=2?' urg':'');
+  var txt=dias<0?'Seu acesso venceu.':dias===0?'Seu acesso vence hoje.':'Seu acesso vai até '+v.split('-').reverse().join('/')+' · restam '+dias+' dia'+(dias>1?'s':'')+'.';
+  el.innerHTML='<span>⏳ '+txt+' Seus dados continuam guardados.</span><a target="_blank" rel="noopener" href="https://wa.me/5588921002123?text='+encodeURIComponent('Olá! Quero renovar o acesso ao Gestão Pro ('+((db.empresa&&db.empresa.nome)||'minha empresa')+').')+'">Renovar pelo WhatsApp</a>';
+  app.insertBefore(el,app.firstChild);
+}
+/* ---- importar clientes / fornecedores ---- */
+var MODELOS={clientes:'Nome;WhatsApp;E-mail;CPF/CNPJ;Endereço;Observações\r\nMaria da Silva;(88) 99999-0000;maria@email.com;000.000.000-00;Rua A, 10;Cliente fiel\r\n',fornecedores:'Nome;CNPJ/CPF;Telefone;E-mail;Endereço;Observações\r\nDistribuidora Exemplo;00.000.000/0001-00;(88) 3333-0000;vendas@exemplo.com;Av. Central, 100;Entrega em 3 dias\r\n'};
+function modeloCsv(tipo){var b=new Blob(['﻿'+MODELOS[tipo]],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='modelo-'+tipo+'.csv';a.click();setTimeout(function(){URL.revokeObjectURL(a.href)},1500)}
+function importar(tipo,file){
+  if(!file)return;if(file.size>5*1024*1024)return alert('O CSV deve ter até 5 MB.');
+  var rd=new FileReader();rd.onload=function(){try{
+    var p=parseCsvText(rd.result);if(!p.rows.length)throw new Error('Não há linhas para importar.');
+    var arr=tipo==='clientes'?db.clientes:db.fornecedores,add=0,pul=0,dup=0;
+    var chave=function(o){return String((o.nome||'')).trim().toLowerCase()+'|'+String(o.tel||'').replace(/\D/g,'')};
+    var vistos={};arr.forEach(function(o){vistos[chave(o)]=1});
+    p.rows.forEach(function(r){var nome=csvPick(r,['Nome','Cliente','Fornecedor','Razão social','Razao social','Nome completo']);if(!nome){pul++;return}
+      var o=tipo==='clientes'?{nome:nome,tel:csvPick(r,['WhatsApp','Telefone','Celular','Fone','Tel']),email:csvPick(r,['E-mail','Email']),cpf:csvPick(r,['CPF/CNPJ','CPF','CNPJ','Documento']),endereco:csvPick(r,['Endereço','Endereco']),nascimento:'',obs:csvPick(r,['Observações','Observacoes','Obs'])}:{nome:nome,cnpj:csvPick(r,['CNPJ/CPF','CNPJ','CPF','Documento']),tel:csvPick(r,['Telefone','WhatsApp','Celular','Fone','Tel']),email:csvPick(r,['E-mail','Email']),endereco:csvPick(r,['Endereço','Endereco']),obs:csvPick(r,['Observações','Observacoes','Obs'])};
+      var k=chave(o);if(vistos[k]){dup++;return}vistos[k]=1;o.id=uid();arr.push(o);add++});
+    save();render();alert(add+' cadastrado(s). '+(dup?dup+' já existiam e foram ignorados. ':'')+(pul?pul+' linha(s) sem nome foram puladas.':''))
+  }catch(err){alert('Não foi possível importar: '+err.message)}};
+  rd.readAsText(file,'UTF-8');
+}
+document.addEventListener('change',function(e){var t=e.target;if(t&&t.dataset&&t.dataset.imp){var f=t.files&&t.files[0];t.value='';importar(t.dataset.imp,f)}},true);
+function injetaImport(){
+  ['clientes','fornecedores'].forEach(function(tp){
+    if(tab!==tp)return;var form=document.getElementById(tp==='clientes'?'fc':'ffornecedor');if(!form)return;var card=form.closest('.card');if(!card||card.querySelector('.imp-bar'))return;
+    var head=card.querySelector('.fx-head')||card.querySelector('.panel-heading');if(!head)return;
+    var w=document.createElement('div');w.className='imp-bar';
+    w.innerHTML='<label class="btn s" style="cursor:pointer">Importar CSV<input type="file" accept=".csv,text/csv" data-imp="'+tp+'" hidden></label><button type="button" class="btn s" data-act="imp-modelo" data-tipo="'+tp+'">Baixar modelo</button>';
+    var btn=head.querySelector('.fx-toggle');head.insertBefore(w,btn||null);
+  });
+}
+/* ---- camera / codigo de barras ---- */
+function carregaZx(cb){if(window.ZXing)return cb();var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';s.onload=cb;s.onerror=function(){alert('Não consegui carregar o leitor de código de barras. Verifique a internet.')};document.head.appendChild(s)}
+function escanear(alvo){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return alert('Este navegador não permite usar a câmera. Use o Chrome ou o Safari atualizado.');
+  var ov=document.createElement('div');ov.className='scan-ov';ov.innerHTML='<div class="scan-box"><video playsinline muted autoplay></video><div class="scan-line"></div><div class="scan-bar"><span>Aponte para o código de barras</span><button type="button">Cancelar</button></div></div>';document.body.appendChild(ov);
+  var video=ov.querySelector('video'),stream=null,parou=false,reader=null;
+  function fim(code){if(parou)return;parou=true;try{if(reader)reader.reset()}catch(x){}if(stream)stream.getTracks().forEach(function(t){t.stop()});ov.remove();if(code)entregar(alvo,code)}
+  ov.querySelector('button').onclick=function(){fim(null)};
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}).then(function(s){
+    stream=s;video.srcObject=s;
+    if('BarcodeDetector' in window){var det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf']});
+      (function loop(){if(parou)return;det.detect(video).then(function(r){if(r&&r.length&&r[0].rawValue)fim(r[0].rawValue);else setTimeout(loop,250)}).catch(function(){setTimeout(loop,400)})})();
+    }else{carregaZx(function(){try{reader=new ZXing.BrowserMultiFormatReader();reader.decodeFromVideoElement(video,function(res){if(res)fim(res.getText())})}catch(x){fim(null);alert('Leitor indisponível neste aparelho.')}})}
+  }).catch(function(){fim(null);alert('Não foi possível abrir a câmera. Permita o acesso à câmera nas configurações do navegador.')});
+}
+function entregar(alvo,code){
+  var el=alvo==='pdv'?document.getElementById('pdv-barcode'):document.querySelector('#fp [name=codigoBarras]');if(!el)return;
+  el.value=code;el.dispatchEvent(new Event('input',{bubbles:true}));
+  if(alvo==='pdv')el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  else{var d=el.closest('details');if(d)d.open=true}
+}
+function injetaCam(){
+  [['#pdv-barcode','pdv'],['#fp [name=codigoBarras]','prod']].forEach(function(x){
+    var el=document.querySelector(x[0]);if(!el||el.dataset.cam)return;el.dataset.cam='1';
+    var w=document.createElement('span');w.className='cam-wrap';el.parentNode.insertBefore(w,el);w.appendChild(el);
+    var b=document.createElement('button');b.type='button';b.className='cam-btn';b.title='Ler pela câmera';b.dataset.scan=x[1];b.textContent='📷';w.appendChild(b);
+  });
+}
+/* ---- celular: instalar como app ---- */
+(function(){
+  function meta(n,c){var m=document.createElement('meta');m.name=n;m.content=c;document.head.appendChild(m)}
+  meta('mobile-web-app-capable','yes');meta('apple-mobile-web-app-capable','yes');meta('apple-mobile-web-app-title','Gestão Pro');meta('apple-mobile-web-app-status-bar-style','black-translucent');
+  try{var c=document.createElement('canvas');c.width=c.height=192;var g=c.getContext('2d');g.fillStyle='#18352f';g.beginPath();if(g.roundRect)g.roundRect(0,0,192,192,40);else g.rect(0,0,192,192);g.fill();g.fillStyle='#34d29f';g.font='bold 92px system-ui,Arial';g.textAlign='center';g.textBaseline='middle';g.fillText('GP',96,102);
+    var png=c.toDataURL('image/png');var l=document.createElement('link');l.rel='apple-touch-icon';l.href=png;document.head.appendChild(l);
+    var man={name:'Gestão Pro',short_name:'Gestão Pro',start_url:location.origin+location.pathname,display:'standalone',background_color:'#081323',theme_color:'#081323',icons:[{src:png,sizes:'192x192',type:'image/png'}]};
+    var ml=document.createElement('link');ml.rel='manifest';ml.href=URL.createObjectURL(new Blob([JSON.stringify(man)],{type:'application/manifest+json'}));document.head.appendChild(ml)}catch(e){}
+})();
+/* ---- gancho no render ---- */
+var r0=window.render;
+window.render=function(){var x=r0.apply(this,arguments);try{injetaImport();injetaCam();vencBar();fab();setTimeout(onb,1200)}catch(err){console.error(err)}return x};
+try{fab()}catch(e){}
 })();
 </script>
 <script>
