@@ -1971,22 +1971,101 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 })();
 </script>
 <script>
-/* DOCUMENTOS: abre notas/tabelas numa janela dentro da propria pagina (sem abrir outra aba) */
+/* DOCUMENTOS: abre notas/relatorios numa tela dentro da pagina, com Compartilhar PDF, WhatsApp e Imprimir (funciona no iPhone) */
 window.docOverlay=function(titulo){
   var old=document.getElementById('doc-ov');if(old)old.remove();
+  if(!document.getElementById('doc-css')){var st=document.createElement('style');st.id='doc-css';st.textContent=
+   '#doc-ov{position:fixed;inset:0;z-index:99999;background:rgba(10,20,17,.72);display:flex;align-items:center;justify-content:center;padding:16px}'+
+   '#doc-ov .dbox{background:#fff;border-radius:14px;width:min(880px,100%);height:min(92vh,1000px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px #0008}'+
+   '#doc-ov .dbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #dfe7e5;background:#f4f8f6}'+
+   '#doc-ov .dbar b{flex:1 1 100%;color:#16241f;font:700 15px system-ui}'+
+   '#doc-ov .dbar button{flex:1 1 0;min-width:96px;min-height:44px;padding:8px 10px;border:1px solid #cfdad6;border-radius:10px;background:#fff;color:#16241f;font:700 13px system-ui;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}'+
+   '#doc-ov .dbar button.p{background:#0f9f7a;border-color:#0f9f7a;color:#fff}'+
+   '#doc-ov .dbar button.w{background:#25d366;border-color:#25d366;color:#073b1c}'+
+   '#doc-ov .dbar button[disabled]{opacity:.6}'+
+   '#doc-ov iframe{flex:1;border:0;width:100%;background:#fff}'+
+   '@media(max-width:700px){#doc-ov{padding:0}#doc-ov .dbox{width:100%;height:100%;border-radius:0}#doc-ov .dbar{padding-top:max(10px,env(safe-area-inset-top))}}'+
+   '#print-root{display:none}@media print{body>*:not(#print-root){display:none!important}#print-root{display:block!important}}';
+   document.head.appendChild(st)}
   var ov=document.createElement('div');ov.id='doc-ov';
-  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(10,20,17,.72);display:flex;align-items:center;justify-content:center;padding:16px';
-  ov.innerHTML='<div style="background:#fff;border-radius:14px;width:min(880px,100%);height:min(92vh,1000px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px #0008"><div style="display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #dfe7e5;background:#f4f8f6"><b style="flex:1;color:#16241f;font:700 15px system-ui">'+(titulo||'Documento')+'</b><button type="button" id="doc-print" style="padding:9px 16px;border:0;border-radius:9px;background:#0f9f7a;color:#fff;font:700 13px system-ui;cursor:pointer">Imprimir / Salvar PDF</button><button type="button" id="doc-close" style="padding:9px 16px;border:1px solid #c9d6d1;border-radius:9px;background:#fff;color:#16241f;font:700 13px system-ui;cursor:pointer">Fechar</button></div><iframe id="doc-frame" style="flex:1;border:0;width:100%;background:#fff"></iframe></div>';
+  ov.innerHTML='<div class="dbox"><div class="dbar"><b>'+(titulo||'Documento')+'</b><button type="button" class="w" id="doc-wa">WhatsApp</button><button type="button" class="p" id="doc-share">Compartilhar PDF</button><button type="button" id="doc-print">Imprimir</button><button type="button" id="doc-close">Fechar</button></div><iframe id="doc-frame" title="Documento"></iframe></div>';
   document.body.appendChild(ov);
-  var fr=ov.querySelector('#doc-frame');
+  var fr=ov.querySelector('#doc-frame'),buf='',nomeArq=(titulo||'documento').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   function fechar(){ov.remove();document.removeEventListener('keydown',esc)}
   function esc(e){if(e.key==='Escape')fechar()}
   document.addEventListener('keydown',esc);
-  ov.querySelector('#doc-close').onclick=fechar;
+  ov.querySelector('#doc-close').addEventListener('click',fechar);
   ov.addEventListener('mousedown',function(e){if(e.target===ov)fechar()});
-  ov.querySelector('#doc-print').onclick=function(){try{fr.contentWindow.focus();fr.contentWindow.print()}catch(e){window.print()}};
-  var buf='';
-  return {document:{write:function(h){buf+=h},close:function(){fr.srcdoc=buf.replace(/<button onclick="window\.print\(\)">[^<]*<\/button>/,'').replace(/<script>setTimeout[^<]*<\/script>/,'')}}};
+  function limpo(h){return h.replace(/<button onclick="window\.print\(\)">[^<]*<\/button>/,'').replace(/<script>setTimeout[^<]*<\/script>/,'')}
+  function texto(){
+    var d=fr.contentDocument;if(!d||!d.body)return titulo||'';
+    var t=(d.body.innerText||'').replace(/\t+/g,' | ').replace(/[  ]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+    return t.replace(/Imprimir \/ Salvar PDF/g,'').trim();
+  }
+  function telCliente(t){
+    try{var m=/Cliente:\s*([^\n]+)/.exec(t);if(!m)return '';var nm=m[1].trim().toLowerCase();
+      var c=(typeof db!=='undefined'&&db.clientes||[]).find(function(x){return (x.nome||'').trim().toLowerCase()===nm});
+      return c?String(c.tel||'').replace(/\D/g,''):'';}catch(e){return ''}
+  }
+  ov.querySelector('#doc-wa').addEventListener('click',function(){
+    var t=texto(),n=telCliente(t);
+    if(!n){var r=prompt('WhatsApp do cliente (com DDD). Deixe vazio para escolher o contato no WhatsApp:','');if(r===null)return;n=r.replace(/\D/g,'')}
+    if(n&&n.length<=11)n='55'+n;
+    var a=document.createElement('a');a.href='https://wa.me/'+n+'?text='+encodeURIComponent(t);a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
+  });
+  /* imprimir: copia o conteudo para a pagina principal (iPhone nao imprime dentro de iframe) */
+  ov.querySelector('#doc-print').addEventListener('click',function(){
+    var d=fr.contentDocument;if(!d||!d.body)return;
+    var css='';[].forEach.call(d.querySelectorAll('style'),function(s){css+=s.textContent});
+    var pr=document.getElementById('print-root');if(pr)pr.remove();
+    pr=document.createElement('div');pr.id='print-root';
+    pr.innerHTML='<style>@media print{'+css.replace(/body\{[^}]*\}/g,'')+'}</style><div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:16px;color:#222">'+d.body.innerHTML+'</div>';
+    document.body.appendChild(pr);
+    function fim(){window.removeEventListener('afterprint',fim);var p=document.getElementById('print-root');if(p)p.remove()}
+    window.addEventListener('afterprint',fim);
+    setTimeout(function(){window.print();setTimeout(function(){if(!/iPhone|iPad/.test(navigator.userAgent))fim()},500)},80);
+  });
+  function carrega(src){return new Promise(function(ok,err){var s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=function(){err(new Error('lib'))};document.head.appendChild(s)})}
+  function gerarPdf(){
+    return Promise.resolve().then(function(){
+      if(window.html2canvas&&window.jspdf)return;
+      return carrega('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js').then(function(){return carrega('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')});
+    }).then(function(){
+      return new Promise(function(ok,err){
+        var h=document.createElement('iframe');h.style.cssText='position:fixed;left:-9999px;top:0;width:800px;height:1200px;border:0;background:#fff';
+        h.onload=function(){setTimeout(function(){
+          var b=h.contentDocument.body;
+          window.html2canvas(b,{scale:2,useCORS:true,backgroundColor:'#fff',windowWidth:800}).then(function(cv){
+            var J=window.jspdf.jsPDF,pdf=new J('p','mm','a4'),W=210,H=297,mg=8,iw=W-2*mg,ih=cv.height*iw/cv.width,pageH=H-2*mg,pos=0,first=true;
+            var ph=Math.floor(cv.width*pageH/iw);
+            while(pos<cv.height){
+              var sl=document.createElement('canvas');sl.width=cv.width;sl.height=Math.min(ph,cv.height-pos);
+              sl.getContext('2d').drawImage(cv,0,pos,cv.width,sl.height,0,0,cv.width,sl.height);
+              if(!first)pdf.addPage();first=false;
+              pdf.addImage(sl.toDataURL('image/jpeg',.92),'JPEG',mg,mg,iw,sl.height*iw/cv.width);pos+=ph;
+            }
+            h.remove();ok(pdf.output('blob'));
+          }).catch(function(e){h.remove();err(e)});
+        },250)};
+        document.body.appendChild(h);h.srcdoc=limpo(buf);
+      });
+    });
+  }
+  ov.querySelector('#doc-share').addEventListener('click',function(){
+    var bt=this,rot=bt.textContent;bt.disabled=true;bt.textContent='Gerando PDF...';
+    gerarPdf().then(function(blob){
+      var f=new File([blob],nomeArq+'.pdf',{type:'application/pdf'});
+      if(navigator.canShare&&navigator.canShare({files:[f]}))return navigator.share({files:[f],title:titulo||'Documento'});
+      var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nomeArq+'.pdf';document.body.appendChild(a);a.click();a.remove();
+    }).catch(function(e){
+      if(e&&e.name==='AbortError')return;
+      var t=texto();
+      if(navigator.share)navigator.share({title:titulo||'Documento',text:t}).catch(function(){});
+      else alert('Nao foi possivel gerar o PDF agora. Use o botao WhatsApp.');
+    }).then(function(){bt.disabled=false;bt.textContent=rot});
+  });
+  var MOB='<meta name="viewport" content="width=device-width,initial-scale=1"><style>@media(max-width:700px){body{margin:0!important;padding:14px!important;max-width:100%!important;box-sizing:border-box;font-size:14px}.head{flex-direction:column;align-items:flex-start!important;gap:10px!important}.logo{max-width:120px!important}table{font-size:12.5px}th,td{padding:7px 4px!important}.total{font-size:18px!important}img{max-width:100%}}</style>';
+  return {document:{write:function(h){buf+=h},close:function(){var h=limpo(buf);fr.srcdoc=/<\/head>/i.test(h)?h.replace(/<\/head>/i,MOB+'</head>'):MOB+h}}};
 };
 </script>
 <script>
